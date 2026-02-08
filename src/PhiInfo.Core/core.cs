@@ -1,9 +1,7 @@
 ﻿namespace PhiInfo.Core;
 
 using System;
-using System.Diagnostics.SymbolStore;
 using System.IO;
-using System.Text.Json;
 using AssetsTools.NET;
 using AssetsTools.NET.Cpp2IL;
 using AssetsTools.NET.Extra;
@@ -68,15 +66,13 @@ public class PhiInfo
             bool MonoFields = false)
         {
             ushort scriptIndex = info.GetScriptIndex(file);
-            int typeId = info.TypeId;
-            bool isMonoBehaviour = typeId == (int)AssetClassID.MonoBehaviour;
 
             AssetTypeTemplateField? baseField = null;
 
             // 1. 优先 TypeTree
             if (file.Metadata.TypeTreeEnabled)
             {
-                var tt = file.Metadata.FindTypeTreeTypeByID(typeId, scriptIndex);
+                var tt = file.Metadata.FindTypeTreeTypeByID(info.TypeId, scriptIndex);
                 if (tt != null && tt.Nodes.Count > 0)
                 {
                     baseField = new AssetTypeTemplateField();
@@ -87,10 +83,7 @@ public class PhiInfo
             // 2. 回退到 ClassDatabase
             if (baseField == null)
             {
-                // MonoBehaviour 在 ClassDatabase 中有固定 ID
-                int fixedTypeId = isMonoBehaviour ? (int)AssetClassID.MonoBehaviour : typeId;
-                
-                var cldbType = classDatabase.FindAssetClassByID(fixedTypeId);
+                var cldbType = classDatabase.FindAssetClassByID(info.TypeId);
                 if (cldbType == null)
                     return null;
 
@@ -99,7 +92,7 @@ public class PhiInfo
             }
 
             // 3. MonoBehaviour: 使用 MonoTempGenerator 补充字段
-            if (isMonoBehaviour && tempGen != null && MonoFields && reader != null)
+            if (info.TypeId == (int)AssetClassID.MonoBehaviour && tempGen != null && MonoFields && reader != null)
             {
                 // 保存原始位置
                 long originalPosition = reader.Position;
