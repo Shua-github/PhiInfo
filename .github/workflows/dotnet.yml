@@ -1,0 +1,30 @@
+name: dotnet-ci
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: "10.0"
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v6
+      with:
+        name: PhiInfo.CLI
+        path: ./src/PhiInfo.CLI/bin/Release/net10.0/**
