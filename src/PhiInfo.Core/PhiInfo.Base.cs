@@ -15,8 +15,6 @@ namespace PhiInfo.Core
 
         private readonly Cpp2IlTempGenerator tempGen;
 
-        static readonly string tempDir = "./temp/";
-
         static readonly string lang = "chinese";
         static readonly int langId = 40;
 
@@ -33,14 +31,11 @@ namespace PhiInfo.Core
             var ClassPackage = new ClassPackageFile();
             ClassPackage.Read(new AssetsFileReader(cldb));
             classDatabase = ClassPackage.GetClassDatabase(ggmInst.Metadata.UnityVersion);
+
             level0Inst.Read(new AssetsFileReader(level0));
             level22Inst.Read(new AssetsFileReader(level22));
 
-            Directory.CreateDirectory(tempDir);
-
-            File.WriteAllBytes(tempDir+"libil2cpp.so", il2cppSo);
-            File.WriteAllBytes(tempDir+"global-metadata.dat", globalMetadata);
-            tempGen = new Cpp2IlTempGenerator(tempDir+"global-metadata.dat", tempDir+"libil2cpp.so");
+            tempGen = new Cpp2IlTempGenerator(globalMetadata, il2cppSo);
         }
         private AssetTypeValueField GetBaseField(
             AssetsFile file,
