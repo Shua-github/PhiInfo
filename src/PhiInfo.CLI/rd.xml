@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="ApkReader">
+        <Type Name="AlphaOmega.Debug.ArscApi+ResTable_Header" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResChunk_Header" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResStringPool_Header" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+PackageHeader" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResTable_typeSpec" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResTable_Type" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResTable_entry" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+Res_value" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResTable_map_entry" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.ArscApi+ResTable_map" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.AxmlApi+Chunk" MarshalStructure="Required All" />
+        <Type Name="System.UInt32" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.AxmlApi+Document" MarshalStructure="Required All" />
+        <Type Name="System.Int16" MarshalStructure="Required All" />
+        <Type Name="AlphaOmega.Debug.AxmlApi+EndTag" MarshalStructure="Required All" />
+    </Assembly>
+  </Application>
+</Directives>
