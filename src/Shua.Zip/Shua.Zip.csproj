@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <Platforms>AnyCPU</Platforms>
-    <AllowUnsafeBlocks>False</AllowUnsafeBlocks>
-    <OutputType>Library</OutputType>
-    <LangVersion>14</LangVersion>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <Platforms>AnyCPU</Platforms>
+        <AllowUnsafeBlocks>False</AllowUnsafeBlocks>
+        <OutputType>Library</OutputType>
+        <LangVersion>14</LangVersion>
+    </PropertyGroup>
 </Project>

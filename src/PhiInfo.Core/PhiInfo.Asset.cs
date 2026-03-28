@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
@@ -9,23 +8,19 @@ namespace PhiInfo.Core;
 
 public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getBundleStreamFunc)
 {
-    private readonly CatalogParser _catalogParser = catalogParser;
-
-    private readonly Func<string, Stream> _getBundleStreamFunc = getBundleStreamFunc;
-
-    static byte[] ReadRangeAsBytes(Stream baseStream, long offset, int size)
+    private static byte[] ReadRangeAsBytes(Stream baseStream, long offset, int size)
     {
-        byte[] buffer = new byte[size];
+        var buffer = new byte[size];
 
-        long oldPos = baseStream.Position;
+        var oldPos = baseStream.Position;
         try
         {
             baseStream.Seek(offset, SeekOrigin.Begin);
 
-            int readTotal = 0;
+            var readTotal = 0;
             while (readTotal < size)
             {
-                int read = baseStream.Read(
+                var read = baseStream.Read(
                     buffer,
                     readTotal,
                     size - readTotal
@@ -47,7 +42,7 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
 
     private T ProcessAssetBundle<T>(string path, Func<AssetBundleFile, AssetsFile, T> processor)
     {
-        var file = getBundle(path);
+        var file = GetBundle(path);
         var reader = new AssetsFileReader(file);
         AssetBundleFile bun = new();
         bun.Read(reader);
@@ -58,85 +53,90 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
 
         bun.GetFileRange(0, out long offset, out long size);
         SegmentStream stream = new(bun.DataReader.BaseStream, offset, size);
-        AssetsFile info_file = new();
-        info_file.Read(new AssetsFileReader(stream));
+        AssetsFile infoFile = new();
+        infoFile.Read(new AssetsFileReader(stream));
 
         try
         {
-            return processor(bun, info_file);
+            return processor(bun, infoFile);
         }
         finally
         {
             bun.Close();
-            info_file.Close();
+            infoFile.Close();
         }
     }
 
     public Image GetImageRaw(string path)
     {
-        return ProcessAssetBundle(path, (bun, info_file) =>
+        return ProcessAssetBundle(path, (bun, infoFile) =>
         {
-            foreach (var info in info_file.AssetInfos)
+            foreach (var info in infoFile.AssetInfos)
             {
                 if (info.TypeId == (int)AssetClassID.Texture2D)
                 {
-                    var baseField = PhiInfo.GetBaseField(info_file, info);
+                    var baseField = PhiInfo.GetBaseField(infoFile, info);
                     var height = baseField["m_Height"].AsUInt;
                     var width = baseField["m_Width"].AsUInt;
                     var format = baseField["m_TextureFormat"].AsUInt;
-                    var data_offset = baseField["m_StreamData"]["offset"].AsLong;
-                    var data_size = baseField["m_StreamData"]["size"].AsLong;
-                    bun.GetFileRange(1, out long data_file_offset, out long data_file_size);
-                    var data = ReadRangeAsBytes(bun.DataReader.BaseStream, data_file_offset + data_offset, (int)data_size);
+                    var dataOffset = baseField["m_StreamData"]["offset"].AsLong;
+                    var dataSize = baseField["m_StreamData"]["size"].AsLong;
+                    bun.GetFileRange(1, out var dataFileOffset, out _);
+                    var data = ReadRangeAsBytes(bun.DataReader.BaseStream, dataFileOffset + dataOffset,
+                        (int)dataSize);
                     var image = new Image { format = format, width = width, height = height, data = data };
                     return image;
                 }
             }
+
             throw new Exception("No Texture2D found in the asset bundle.");
         });
     }
 
     public Music GetMusicRaw(string path)
     {
-        return ProcessAssetBundle(path, (bun, info_file) =>
+        return ProcessAssetBundle(path, (bun, infoFile) =>
         {
-            foreach (var info in info_file.AssetInfos)
+            foreach (var info in infoFile.AssetInfos)
             {
                 if (info.TypeId == (int)AssetClassID.AudioClip)
                 {
-                    var baseField = PhiInfo.GetBaseField(info_file, info);
-                    var data_offset = baseField["m_Resource"]["m_Offset"].AsLong;
-                    var data_size = baseField["m_Resource"]["m_Size"].AsLong;
+                    var baseField = PhiInfo.GetBaseField(infoFile, info);
+                    var dataOffset = baseField["m_Resource"]["m_Offset"].AsLong;
+                    var dataSize = baseField["m_Resource"]["m_Size"].AsLong;
                     var length = baseField["m_Length"].AsFloat;
-                    bun.GetFileRange(1, out long data_file_offset, out long data_file_size);
-                    var data = ReadRangeAsBytes(bun.DataReader.BaseStream, data_file_offset + data_offset, (int)data_size);
+                    bun.GetFileRange(1, out var dataFileOffset, out _);
+                    var data = ReadRangeAsBytes(bun.DataReader.BaseStream, dataFileOffset + dataOffset,
+                        (int)dataSize);
                     return new Music { data = data, length = length };
                 }
             }
+
             throw new Exception("No AudioClip found in the asset bundle.");
         });
     }
 
     public Text GetText(string path)
     {
-        return ProcessAssetBundle(path, (bun, info_file) =>
+        return ProcessAssetBundle(path, (_, infoFile) =>
         {
-            foreach (var info in info_file.AssetInfos)
+            foreach (var info in infoFile.AssetInfos)
             {
                 if (info.TypeId == (int)AssetClassID.TextAsset)
                 {
-                    var baseField = PhiInfo.GetBaseField(info_file, info);
+                    var baseField = PhiInfo.GetBaseField(infoFile, info);
                     var text = baseField["m_Script"].AsString;
                     return new Text { content = text };
                 }
             }
+
             throw new Exception("No TextAsset found in the asset bundle.");
         });
     }
 
-    private Stream getBundle(string path)
+    private Stream GetBundle(string path)
     {
-        var bundlePath = _catalogParser.Get(path);
+        var bundlePath = catalogParser.Get(path);
         if (bundlePath == null)
             throw new Exception($"Asset {path} not found in catalog.");
         if (bundlePath.Value.ResolvedKey == null)
@@ -144,6 +144,6 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
         if (bundlePath.Value.ResolvedKey.Value.StringValue == null)
             throw new Exception($"Asset {path} has invalid resolved bundle path.");
 
-        return _getBundleStreamFunc(bundlePath.Value.ResolvedKey.Value.StringValue);
+        return getBundleStreamFunc(bundlePath.Value.ResolvedKey.Value.StringValue);
     }
 }

@@ -7,16 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace PhiInfo.Core
 {
-    internal sealed class ByteReader
+    internal sealed class ByteReader(byte[] data)
     {
-        private readonly byte[] _data;
+        private readonly byte[] _data = data;
         private int _pos;
-
-        public ByteReader(byte[] data)
-        {
-            _data = data;
-            _pos = 0;
-        }
 
         public int ReadInt()
         {
@@ -76,16 +70,10 @@ namespace PhiInfo.Core
             => new(false, 0, key);
     }
 
-    public sealed class CatalogEntry
+    public sealed class CatalogEntry(CatalogKey key, CatalogValue value)
     {
-        public CatalogKey Key { get; }
-        public CatalogValue? Value { get; set; }
-
-        public CatalogEntry(CatalogKey key, CatalogValue? value)
-        {
-            Key = key;
-            Value = value;
-        }
+        public CatalogKey Key { get; } = key;
+        public CatalogValue Value { get; set; } = value;
     }
 
 
@@ -128,6 +116,7 @@ namespace PhiInfo.Core
                     return entry.Value;
                 }
             }
+
             return null;
         }
 
@@ -142,6 +131,7 @@ namespace PhiInfo.Core
                     return entry.Value;
                 }
             }
+
             return null;
         }
 
@@ -202,23 +192,12 @@ namespace PhiInfo.Core
                 }
 
                 int entryCount = reader.ReadInt();
-                CatalogValue? value = null;
-
-                if (entryCount > 0)
-                {
-                    int entryPos = reader.ReadInt();
-                    for (int j = 1; j < entryCount; j++)
-                        reader.ReadInt();
-
-                    int entryStart = 4 + 28 * entryPos;
-                    if (entryStart + 9 < entryData.Length)
-                    {
-                        ushort raw = (ushort)(
-                            entryData[entryStart + 8] ^
-                            (entryData[entryStart + 9] << 8));
-                        value = CatalogValue.FromRaw(raw);
-                    }
-                }
+                int entryPos = reader.ReadInt();
+                for (int j = 1; j < entryCount; j++)
+                    reader.ReadInt();
+                int entryStart = 4 + 28 * entryPos;
+                ushort raw = (ushort)(entryData[entryStart + 8] ^ (entryData[entryStart + 9] << 8));
+                var value = CatalogValue.FromRaw(raw);
 
                 table.Add(new CatalogEntry(key, value));
             }
@@ -232,10 +211,10 @@ namespace PhiInfo.Core
             for (int i = 0; i < table.Count; i++)
             {
                 var value = table[i].Value;
-                if (value == null || !value.Value.IsReference)
+                if (!value.IsReference)
                     continue;
 
-                ushort index = value.Value.RawValue;
+                ushort index = value.RawValue;
                 if (index == 65535 || index >= table.Count)
                     continue;
 

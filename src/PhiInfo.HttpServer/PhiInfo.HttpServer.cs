@@ -24,9 +24,11 @@ namespace PhiInfo
     [JsonSerializable(typeof(List<string>))]
     [JsonSerializable(typeof(List<ChapterInfo>))]
     [JsonSerializable(typeof(AllInfo))]
-    public partial class JsonContext : JsonSerializerContext { }
+    public partial class JsonContext : JsonSerializerContext
+    {
+    }
 
-    public abstract class HttpServer : IDisposable
+    public class HttpServer : IDisposable
     {
         private readonly JsonContext _jsonContext = new(new JsonSerializerOptions
         {
@@ -35,35 +37,31 @@ namespace PhiInfo
 
         private readonly PhiInfoAsset _phiAsset;
         private readonly Core.PhiInfo _phiInfo;
-        public readonly ShuaZip _zip;
-        private readonly string _phiVersion;
-
+        protected readonly ShuaZip Zip;
         private HttpListener? _listener;
         private CancellationTokenSource? _cts;
         private bool _disposed;
-        private readonly Dictionary<string, Func<HttpListenerRequest, Task<(byte[] data, string contentType)>>> _routeHandlers;
+
+        private readonly Dictionary<string, Func<HttpListenerRequest, Task<(byte[] data, string contentType)>>>
+            _routeHandlers;
 
         public HttpServer(string apkPath, Stream cldbStream)
         {
             var reader = new MmapReadAt(apkPath);
-            _zip = new ShuaZip(reader);
+            Zip = new ShuaZip(reader);
 
-            _phiVersion = LoadVersionCode();
-
-            using var catalogStream = _zip.OpenFileStreamByName("assets/aa/catalog.json");
+            using var catalogStream = Zip.OpenFileStreamByName("assets/aa/catalog.json");
             var catalogParser = new CatalogParser(catalogStream);
 
-            _phiAsset = new PhiInfoAsset(catalogParser, (bundleName) =>
-            {
-                return _zip.OpenFileStreamByName("assets/aa/Android/" + bundleName);
-            });
+            _phiAsset = new PhiInfoAsset(catalogParser,
+                (bundleName) => { return Zip.OpenFileStreamByName("assets/aa/Android/" + bundleName); });
 
             _phiInfo = new Core.PhiInfo(
-                _zip.OpenFileStreamByName("assets/bin/Data/globalgamemanagers.assets"),
-                _zip.OpenFileStreamByName("assets/bin/Data/level0"),
-                SetupLevel22(_zip),
-                _zip.ReadFileByName("lib/arm64-v8a/libil2cpp.so"),
-                _zip.ReadFileByName("assets/bin/Data/Managed/Metadata/global-metadata.dat"),
+                Zip.OpenFileStreamByName("assets/bin/Data/globalgamemanagers.assets"),
+                Zip.OpenFileStreamByName("assets/bin/Data/level0"),
+                SetupLevel22(Zip),
+                Zip.ReadFileByName("lib/arm64-v8a/libil2cpp.so"),
+                Zip.ReadFileByName("assets/bin/Data/Managed/Metadata/global-metadata.dat"),
                 cldbStream
             );
 
@@ -74,22 +72,29 @@ namespace PhiInfo
                 ["/asset/text"] = async r => (GetAssetText(r.QueryString["path"]), "text/plain"),
                 ["/asset/music"] = async r => (GetAssetMusic(r.QueryString["path"]), "audio/ogg"),
                 ["/asset/image"] = async r => (GetAssetImage(r.QueryString["path"]), "application/octet-stream"),
-                ["/info/songs"] = async _ => (SerializeJson(_phiInfo.ExtractSongInfo(), _jsonContext.ListSongInfo), jsonStream),
-                ["/info/collection"] = async _ => (SerializeJson(_phiInfo.ExtractCollection(), _jsonContext.ListFolder), jsonStream),
-                ["/info/avatars"] = async _ => (SerializeJson(_phiInfo.ExtractAvatars(), _jsonContext.ListAvatar), jsonStream),
-                ["/info/tips"] = async _ => (SerializeJson(_phiInfo.ExtractTips(), _jsonContext.ListString), jsonStream),
-                ["/info/chapters"] = async _ => (SerializeJson(_phiInfo.ExtractChapters(), _jsonContext.ListChapterInfo), jsonStream),
+                ["/info/songs"] = async _ =>
+                    (SerializeJson(_phiInfo.ExtractSongInfo(), _jsonContext.ListSongInfo), jsonStream),
+                ["/info/collection"] = async _ =>
+                    (SerializeJson(_phiInfo.ExtractCollection(), _jsonContext.ListFolder), jsonStream),
+                ["/info/avatars"] = async _ =>
+                    (SerializeJson(_phiInfo.ExtractAvatars(), _jsonContext.ListAvatar), jsonStream),
+                ["/info/tips"] =
+                    async _ => (SerializeJson(_phiInfo.ExtractTips(), _jsonContext.ListString), jsonStream),
+                ["/info/chapters"] = async _ =>
+                    (SerializeJson(_phiInfo.ExtractChapters(), _jsonContext.ListChapterInfo), jsonStream),
                 ["/info/all"] = async _ => (SerializeJson(_phiInfo.ExtractAll(), _jsonContext.AllInfo), jsonStream),
-                ["/info/version"] = async _ => (Encoding.UTF8.GetBytes(_phiVersion), "text/plain")
+                ["/info/version"] = async _ =>
+                    (Encoding.UTF8.GetBytes(_phiInfo.GetPhiVersion().ToString()), "text/plain")
             };
         }
+
         private async Task HandleRequest(HttpListenerContext context)
         {
             using var response = context.Response;
             try
             {
                 string path = context.Request.Url?.AbsolutePath.ToLower() ?? "";
-                
+
                 response.Headers.Add("Access-Control-Allow-Origin", "*");
 
                 if (_routeHandlers.TryGetValue(path, out var handler))
@@ -109,8 +114,8 @@ namespace PhiInfo
             catch (Exception ex)
             {
                 response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                byte[] errorBuffer = Encoding.UTF8.GetBytes($"Server Error: {ex.Message}");
-                try { await response.OutputStream.WriteAsync(errorBuffer); } catch { }
+                var errorBuffer = Encoding.UTF8.GetBytes($"Server Error: {ex.Message}");
+                await response.OutputStream.WriteAsync(errorBuffer);
             }
         }
 
@@ -141,7 +146,6 @@ namespace PhiInfo
             return _phiAsset.GetImageRaw(path).WithHeader();
         }
 
-        protected abstract string LoadVersionCode();
         protected virtual void Log(string msg)
         {
             Console.WriteLine(msg);
@@ -183,7 +187,7 @@ namespace PhiInfo
 
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://{host}:{port}/");
-            
+
             _cts = new CancellationTokenSource();
             _listener.Start();
             await Task.Run(() => ListenLoop(_cts.Token));
@@ -198,8 +202,14 @@ namespace PhiInfo
                     var context = await _listener.GetContextAsync();
                     _ = Task.Run(() => HandleRequest(context), token);
                 }
-                catch (HttpListenerException) { break; }
-                catch (ObjectDisposedException) { break; }
+                catch (HttpListenerException)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
                     Log($"[HttpServer] Accept Error: {ex.Message}");
@@ -222,7 +232,7 @@ namespace PhiInfo
             if (_disposed) return;
             Stop();
             _cts?.Dispose();
-            _zip.Dispose();
+            Zip.Dispose();
             _phiInfo.Dispose();
             _disposed = true;
             GC.SuppressFinalize(this);

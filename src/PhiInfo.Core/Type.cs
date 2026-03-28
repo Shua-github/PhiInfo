@@ -32,6 +32,7 @@ namespace PhiInfo.Core.Type
         public string cover { get; set; }
         public List<FileItem> files { get; set; }
     }
+
     public struct FileItem
     {
         public string key { get; set; }

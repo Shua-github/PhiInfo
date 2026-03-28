@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\PhiInfo.Core\PhiInfo.Core.csproj" />
-    <ProjectReference Include="..\Shua.Zip\Shua.Zip.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\PhiInfo.Core\PhiInfo.Core.csproj" />
+        <ProjectReference Include="..\Shua.Zip\Shua.Zip.csproj" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Fmod5Sharp" Version="3.1.0" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Fmod5Sharp" Version="3.1.0" />
+    </ItemGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <OutputType>Library</OutputType>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+        <OutputType>Library</OutputType>
+    </PropertyGroup>
 </Project>

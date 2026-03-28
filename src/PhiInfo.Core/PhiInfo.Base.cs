@@ -1,55 +1,60 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using AssetsTools.NET;
 using AssetsTools.NET.Cpp2IL;
 using AssetsTools.NET.Extra;
+using LibCpp2IL;
 
 namespace PhiInfo.Core
 {
     public partial class PhiInfo : IDisposable
     {
-        private bool _disposed = false;
-        private readonly AssetsFile ggmInst = new();
-        private readonly AssetsFile level0Inst = new();
-        private readonly AssetsFile level22Inst = new();
-        private readonly ClassDatabaseFile classDatabase;
+        private bool _disposed;
+        private readonly AssetsFile _ggmInst = new();
+        private readonly AssetsFile _level0Inst = new();
+        private readonly AssetsFile _level22Inst = new();
+        private readonly ClassDatabaseFile _classDatabase;
 
-        private readonly Cpp2IlTempGenerator tempGen;
+        private readonly Cpp2IlTempGenerator _tempGen;
 
         private readonly List<AssetsFileReader> _readers = new();
 
-        static readonly string lang = "chinese";
-        static readonly int langId = 40;
+        static readonly string Lang = "chinese";
+        static readonly int LangId = 40;
 
         public PhiInfo(
-        Stream globalGameManagers,
-        Stream level0,
-        Stream level22,
-        byte[] il2cppSo,
-        byte[] globalMetadata,
-        Stream cldb)
+            Stream globalGameManagers,
+            Stream level0,
+            Stream level22,
+            byte[] il2CppSo,
+            byte[] globalMetadata,
+            Stream cldb)
         {
             var ggmReader = new AssetsFileReader(globalGameManagers);
             _readers.Add(ggmReader);
-            ggmInst.Read(ggmReader);
+            _ggmInst.Read(ggmReader);
 
             var level0Reader = new AssetsFileReader(level0);
             _readers.Add(level0Reader);
-            level0Inst.Read(level0Reader);
+            _level0Inst.Read(level0Reader);
 
             var level22Reader = new AssetsFileReader(level22);
             _readers.Add(level22Reader);
-            level22Inst.Read(level22Reader);
+            _level22Inst.Read(level22Reader);
 
             var classPackage = new ClassPackageFile();
             using (var cldbReader = new AssetsFileReader(cldb))
             {
                 classPackage.Read(cldbReader);
             }
-            classDatabase = classPackage.GetClassDatabase(ggmInst.Metadata.UnityVersion);
 
-            tempGen = new Cpp2IlTempGenerator(globalMetadata, il2cppSo);
+            _classDatabase = classPackage.GetClassDatabase(_ggmInst.Metadata.UnityVersion);
+
+            _tempGen = new Cpp2IlTempGenerator(globalMetadata, il2CppSo);
+            _tempGen.SetUnityVersion(new UnityVersion(_ggmInst.Metadata.UnityVersion));
+            _tempGen.InitializeCpp2IL();
         }
 
         public void Dispose()
@@ -61,23 +66,24 @@ namespace PhiInfo.Core
             {
                 r.Dispose();
             }
+
             _readers.Clear();
 
-            level0Inst.Close();
-            level22Inst.Close();
-            ggmInst.Close();
+            _level0Inst.Close();
+            _level22Inst.Close();
+            _ggmInst.Close();
 
-            tempGen.Dispose();
+            _tempGen.Dispose();
         }
 
-        internal AssetTypeValueField GetBaseField(
+        private AssetTypeValueField GetBaseField(
             AssetsFile file,
             AssetFileInfo info,
-            bool MonoFields = false)
+            bool monoFields)
         {
-            long offset = info.GetAbsoluteByteOffset(file);
+            var offset = info.GetAbsoluteByteOffset(file);
 
-            var template = GetTemplateBaseField(file, info, file.Reader, offset, MonoFields);
+            var template = GetTemplateBaseField(file, info, file.Reader, offset, monoFields);
 
             if (template == null)
                 throw new Exception($"Failed to build template for type {info.TypeId}");
@@ -88,33 +94,29 @@ namespace PhiInfo.Core
             return template.MakeValue(file.Reader, offset, refMan);
         }
 
-        static internal AssetTypeValueField GetBaseField(AssetsFile file, AssetFileInfo info)
+        internal static AssetTypeValueField GetBaseField(AssetsFile file, AssetFileInfo info)
         {
-            long offset = info.GetAbsoluteByteOffset(file);
+            var offset = info.GetAbsoluteByteOffset(file);
 
-            if (file.Metadata.TypeTreeEnabled)
-            {
-                var tt = file.Metadata.FindTypeTreeTypeByID(info.TypeId, info.GetScriptIndex(file));
-                if (tt != null && tt.Nodes.Count > 0)
-                {
-                    var template = new AssetTypeTemplateField();
-                    template.FromTypeTree(tt);
+            if (!file.Metadata.TypeTreeEnabled) throw new Exception($"Failed to build template for type {info.TypeId}");
+            var tt = file.Metadata.FindTypeTreeTypeByID(info.TypeId, info.GetScriptIndex(file));
+            if (tt == null || tt.Nodes.Count <= 0)
+                throw new Exception($"Failed to build template for type {info.TypeId}");
+            var template = new AssetTypeTemplateField();
+            template.FromTypeTree(tt);
 
-                    RefTypeManager refMan = new();
-                    refMan.FromTypeTree(file.Metadata);
+            RefTypeManager refMan = new();
+            refMan.FromTypeTree(file.Metadata);
 
-                    return template.MakeValue(file.Reader, offset, refMan);
-                }
-            }
-            throw new Exception($"Failed to build template for type {info.TypeId}");
+            return template.MakeValue(file.Reader, offset, refMan);
         }
 
         private AssetTypeTemplateField? GetTemplateBaseField(
             AssetsFile file,
             AssetFileInfo info,
-            AssetsFileReader reader,
+            AssetsFileReader? reader,
             long absByteStart,
-            bool MonoFields = false)
+            bool monoFields = false)
         {
             ushort scriptIndex = info.GetScriptIndex(file);
 
@@ -134,19 +136,19 @@ namespace PhiInfo.Core
             // 2. 回退到 ClassDatabase
             if (baseField == null)
             {
-                var cldbType = classDatabase.FindAssetClassByID(info.TypeId);
+                var cldbType = _classDatabase.FindAssetClassByID(info.TypeId);
                 if (cldbType == null)
                     return null;
 
                 baseField = new AssetTypeTemplateField();
-                baseField.FromClassDatabase(classDatabase, cldbType);
+                baseField.FromClassDatabase(_classDatabase, cldbType);
             }
 
             // 3. MonoBehaviour: 使用 MonoTempGenerator 补充字段
-            if (info.TypeId == (int)AssetClassID.MonoBehaviour && tempGen != null && MonoFields && reader != null)
+            if (info.TypeId == (int)AssetClassID.MonoBehaviour && monoFields && reader != null)
             {
                 // 保存原始位置
-                long originalPosition = reader.Position;
+                var originalPosition = reader.Position;
                 reader.Position = absByteStart;
 
                 // 创建临时的 RefTypeManager 用于读取值
@@ -166,7 +168,7 @@ namespace PhiInfo.Core
                     }
                     else if (scriptPtr.FileId == 1)
                     {
-                        monoScriptFile = ggmInst;
+                        monoScriptFile = _ggmInst;
                     }
                     else
                     {
@@ -177,7 +179,7 @@ namespace PhiInfo.Core
                     if (monoInfo != null)
                     {
                         if (GetMonoScriptInfo(monoScriptFile, monoInfo,
-                            out string? assemblyName, out string? nameSpace, out string? className))
+                                out var assemblyName, out string? nameSpace, out string? className))
                         {
                             if (assemblyName == null || className == null || nameSpace == null)
                                 throw new Exception("MonoScript info incomplete");
@@ -188,7 +190,7 @@ namespace PhiInfo.Core
                                 assemblyName = assemblyName.Substring(0, assemblyName.Length - 4);
                             }
 
-                            var newBase = tempGen.GetTemplateField(
+                            var newBase = _tempGen.GetTemplateField(
                                 baseField,
                                 assemblyName,
                                 nameSpace,
@@ -205,10 +207,35 @@ namespace PhiInfo.Core
 
                 // 恢复原始位置
                 reader.Position = originalPosition;
-
             }
 
             return baseField;
+        }
+
+        public uint GetPhiVersion()
+        {
+            var meta = LibCpp2IlMain.TheMetadata
+                       ?? throw new Exception("il2cpp 未初始化");
+
+            var assembly = meta.AssemblyDefinitions
+                               .FirstOrDefault(a => a.AssemblyName.Name == "Assembly-CSharp")
+                           ?? throw new Exception("找不到 Assembly-CSharp");
+
+            var type = assembly.Image.Types?
+                           .FirstOrDefault(t => t.FullName == "Constants")
+                       ?? throw new Exception("找不到 Constants 类");
+
+            var field = type.Fields?
+                            .FirstOrDefault(f => f.Name == "IntVersion")
+                        ?? throw new Exception("找不到 IntVersion 字段");
+
+            var defaultValue = meta.GetFieldDefaultValue(field)?.Value
+                               ?? throw new Exception("字段没有默认值");
+
+            if (defaultValue is int intValue)
+                return (uint)intValue;
+
+            throw new Exception($"版本号类型异常: {defaultValue.GetType()}");
         }
 
         private bool GetMonoScriptInfo(
@@ -227,7 +254,7 @@ namespace PhiInfo.Core
                 info,
                 file.Reader,
                 info.GetAbsoluteByteOffset(file),
-                MonoFields: false);
+                monoFields: false);
 
             if (template == null)
                 return false;

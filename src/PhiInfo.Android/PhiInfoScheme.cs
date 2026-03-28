@@ -5,12 +5,12 @@ using Android.OS;
 namespace PhiInfo.Android
 {
     [Activity(Exported = true, NoHistory = true, Theme = "@android:style/Theme.Translucent.NoTitleBar")]
-    [IntentFilter(new[] { Intent.ActionView },
-        Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
+    [IntentFilter([Intent.ActionView],
+        Categories = [Intent.CategoryDefault, Intent.CategoryBrowsable],
         DataScheme = "phiinfo")]
     public class PhiInfoSchemeActivity : Activity
     {
-        protected override void OnCreate(Bundle savedInstanceState)
+        protected override void OnCreate(Bundle? savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
 
@@ -23,7 +23,6 @@ namespace PhiInfo.Android
                 if (command == "start")
                 {
                     StartForegroundService(serviceIntent);
-
                 }
                 else if (command == "exit")
                 {

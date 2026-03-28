@@ -2,25 +2,12 @@
 using System.CommandLine;
 using System.IO;
 using System.Threading;
-using AlphaOmega.Debug;
-using AlphaOmega.Debug.Manifest;
 
 namespace PhiInfo.CLI
 {
-    public class CLIHttpServer(string apkPath, Stream cldbStream) : HttpServer(apkPath, cldbStream)
+    internal class Program
     {
-        protected override string LoadVersionCode()
-        {
-            using AxmlFile axml = new(new StreamLoader(_zip.OpenFileStreamByName("AndroidManifest.xml")));
-            ArscFile arsc = new(_zip.OpenFileStreamByName("resources.arsc"));
-            var Manifest = AndroidManifest.Load(axml, arsc);
-            return Manifest.VersionCode;
-        }
-    }
-
-    class Program
-    {
-        static int Main(string[] args)
+        private static int Main(string[] args)
         {
             Option<FileInfo> apkOption = new("--apk")
             {
@@ -56,18 +43,18 @@ namespace PhiInfo.CLI
 
             rootCommand.SetAction(parseResult =>
             {
-                FileInfo? apkFile = parseResult.GetValue(apkOption);
-                FileInfo? classDataFile = parseResult.GetValue(classDataOption);
-                uint port = parseResult.GetValue(portOption);
-                string? host = parseResult.GetValue(hostOption);
+                var apkFile = parseResult.GetValue(apkOption);
+                var classDataFile = parseResult.GetValue(classDataOption);
+                var port = parseResult.GetValue(portOption);
+                var host = parseResult.GetValue(hostOption);
 
-                if (apkFile == null || !apkFile.Exists)
+                if (apkFile is not { Exists: true })
                 {
                     Console.WriteLine($"Error: APK file not found: {apkFile?.FullName ?? "<null>"}");
                     return;
                 }
 
-                if (classDataFile == null || !classDataFile.Exists)
+                if (classDataFile is not { Exists: true })
                 {
                     Console.WriteLine($"Error: Class data file not found: {classDataFile?.FullName ?? "<null>"}");
                     return;
@@ -75,25 +62,17 @@ namespace PhiInfo.CLI
 
                 if (host == null)
                 {
-                    Console.WriteLine($"Error: Host is null");
+                    Console.WriteLine("Error: Host is null");
                     return;
                 }
 
                 using var cldb = File.OpenRead(classDataFile.FullName);
-                using var server = new CLIHttpServer(apkFile.FullName, cldb);
+                using var server = new HttpServer(apkFile.FullName, cldb);
 
                 _ = server.Start(port, host);
 
-                Console.CancelKeyPress += (sender, e) =>
-                {
-                    e.Cancel = true; 
-                    
-                    Console.WriteLine("\n[System] Shutdown signal received.");
-                    Console.WriteLine("[System] Stopping server...");
-                    
-                    server.Stop();
-                    exitEvent.Set(); 
-                };
+                // 注册事件
+                Console.CancelKeyPress += OnCancelKeyPress;
 
                 Console.WriteLine("--------------------------------------------");
                 Console.WriteLine($"Server is running on http://{host}:{port}/");
@@ -102,7 +81,20 @@ namespace PhiInfo.CLI
 
                 exitEvent.Wait();
 
+
                 Console.WriteLine("[System] Server stopped successfully.");
+                return;
+
+                void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+                {
+                    e.Cancel = true;
+
+                    Console.WriteLine("\n[System] Shutdown signal received.");
+                    Console.WriteLine("[System] Stopping server...");
+
+                    server.Stop();
+                    exitEvent.Set();
+                }
             });
 
             return rootCommand.Parse(args).Invoke();

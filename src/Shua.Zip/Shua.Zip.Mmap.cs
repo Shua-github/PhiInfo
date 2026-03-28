@@ -1,14 +1,12 @@
 using System;
 using System.IO;
 using System.IO.MemoryMappedFiles;
-using Shua.Zip.Type;
 
 namespace Shua.Zip
 {
-    public sealed class MmapReadAt : IReadAt, IDisposable
+    public sealed class MmapReadAt : IReadAt
     {
         private readonly MemoryMappedFile _mmf;
-        private readonly MemoryMappedViewAccessor _accessor;
 
         public long Size { get; }
 
@@ -25,8 +23,6 @@ namespace Shua.Zip
                 mapName: null,
                 capacity: 0,
                 MemoryMappedFileAccess.Read);
-
-            _accessor = _mmf.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
         }
 
         public Stream OpenRead(long offset, int length)
@@ -39,8 +35,7 @@ namespace Shua.Zip
 
         public void Dispose()
         {
-            _accessor?.Dispose();
-            _mmf?.Dispose();
+            _mmf.Dispose();
         }
     }
 }

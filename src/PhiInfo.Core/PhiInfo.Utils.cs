@@ -6,8 +6,8 @@ namespace PhiInfo.Core
     public partial class PhiInfo
     {
         private AssetTypeValueField? FindMonoBehaviour(
-        AssetsFile file,
-        string name)
+            AssetsFile file,
+            string name)
         {
             foreach (var info in file.AssetInfos)
             {
@@ -24,11 +24,11 @@ namespace PhiInfo.Core
                 if (msId == 0)
                     continue;
 
-                var monoInfo = ggmInst.GetAssetInfo(msId);
+                var monoInfo = _ggmInst.GetAssetInfo(msId);
                 if (monoInfo == null)
                     continue;
 
-                var msBase = GetBaseField(ggmInst, monoInfo, false);
+                var msBase = GetBaseField(_ggmInst, monoInfo, false);
                 var msName = msBase["m_Name"]?.AsString;
 
                 if (msName == name)

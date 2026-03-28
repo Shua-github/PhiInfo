@@ -11,7 +11,7 @@ namespace PhiInfo.Core
             var result = new List<SongInfo>();
 
             var gameInfoField = FindMonoBehaviour(
-                level0Inst,
+                _level0Inst,
                 "GameInformation"
             ) ?? throw new Exception("GameInformation MonoBehaviour not found");
 
@@ -38,7 +38,7 @@ namespace PhiInfo.Core
                     var song = songArray[j];
                     string songId = song["songsId"].AsString;
 
-                    var allComboNum = comboDict.ContainsKey(songId) ? comboDict[songId] : new List<int>();
+                    var allComboNum = comboDict.TryGetValue(songId, out var value) ? value : new List<int>();
                     var levelsArray = song["levels"]["Array"];
                     var chartersArray = song["charter"]["Array"];
                     var difficultiesArray = song["difficulty"]["Array"];
@@ -86,7 +86,7 @@ namespace PhiInfo.Core
             var result = new List<Folder>();
 
             var collectionField = FindMonoBehaviour(
-                level22Inst,
+                _level22Inst,
                 "SaturnOSControl"
             ) ?? throw new Exception("SaturnOSControl MonoBehaviour not found");
 
@@ -106,19 +106,19 @@ namespace PhiInfo.Core
                     {
                         key = file["key"].AsString,
                         sub_index = file["subIndex"].AsInt,
-                        name = file["name"][lang].AsString,
+                        name = file["name"][Lang].AsString,
                         date = file["date"].AsString,
-                        supervisor = file["supervisor"][lang].AsString,
+                        supervisor = file["supervisor"][Lang].AsString,
                         category = file["category"].AsString,
-                        content = file["content"][lang].AsString,
-                        properties = file["properties"][lang].AsString
+                        content = file["content"][Lang].AsString,
+                        properties = file["properties"][Lang].AsString
                     });
                 }
 
                 result.Add(new Folder
                 {
-                    title = folder["title"][lang].AsString,
-                    sub_title = folder["subTitle"][lang].AsString,
+                    title = folder["title"][Lang].AsString,
+                    sub_title = folder["subTitle"][Lang].AsString,
                     cover = folder["cover"].AsString,
                     files = files
                 });
@@ -132,7 +132,7 @@ namespace PhiInfo.Core
             var result = new List<Avatar>();
 
             var avatarField = FindMonoBehaviour(
-                level0Inst,
+                _level0Inst,
                 "GetCollectionControl"
             ) ?? throw new Exception("GetCollectionControl MonoBehaviour not found");
 
@@ -156,7 +156,7 @@ namespace PhiInfo.Core
             var result = new List<string>();
 
             var tipsField = FindMonoBehaviour(
-                level0Inst,
+                _level0Inst,
                 "TipsProvider"
             ) ?? throw new Exception("TipsProvider MonoBehaviour not found");
 
@@ -164,13 +164,14 @@ namespace PhiInfo.Core
 
             for (int i = 0; i < tipsArray.Children.Count; i++)
             {
-                var tipslang = tipsArray[i];
-                if (tipslang["language"].AsInt == langId)
+                var tipsLang = tipsArray[i];
+                if (tipsLang["language"].AsInt == LangId)
                 {
-                    for (int j = 0; j < tipslang["tips"]["Array"].Children.Count; j++)
+                    for (int j = 0; j < tipsLang["tips"]["Array"].Children.Count; j++)
                     {
-                        result.Add(tipslang["tips"]["Array"][j].AsString);
+                        result.Add(tipsLang["tips"]["Array"][j].AsString);
                     }
+
                     break;
                 }
             }
@@ -183,7 +184,7 @@ namespace PhiInfo.Core
             var result = new List<ChapterInfo>();
 
             var chapterField = FindMonoBehaviour(
-                level0Inst,
+                _level0Inst,
                 "GameInformation"
             ) ?? throw new Exception("GameInformation MonoBehaviour not found");
 

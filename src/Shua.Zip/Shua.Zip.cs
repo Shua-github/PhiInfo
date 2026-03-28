@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using Shua.Zip.Type;
 
 namespace Shua.Zip
 {
@@ -11,7 +10,7 @@ namespace Shua.Zip
         private readonly IReadAt _reader;
         private readonly long _size;
         public List<FileEntry> FileEntries { get; }
-        private bool _disposed = false;
+        private bool _disposed;
 
         public ShuaZip(IReadAt reader)
         {
@@ -41,10 +40,8 @@ namespace Shua.Zip
 
             while (position + 4 <= cdData.Length)
             {
-                int startPosition = position;
                 if (!FileEntry.TryReadFromCentralDirectory(cdData, ref position, out var entry))
                 {
-                    position = startPosition;
                     break;
                 }
 
@@ -187,7 +184,8 @@ namespace Shua.Zip
             if (string.IsNullOrEmpty(fileName))
                 throw new ArgumentNullException(nameof(fileName));
 
-            var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ?? throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
+            var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ??
+                        throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
 
             return OpenFileStream(entry);
         }
@@ -198,17 +196,17 @@ namespace Shua.Zip
             if (string.IsNullOrEmpty(fileName))
                 throw new ArgumentNullException(nameof(fileName));
 
-            var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ?? throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
+            var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ??
+                        throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
 
             return ReadFile(entry);
         }
 
         public void Dispose()
         {
-            if(_disposed) return;
+            if (_disposed) return;
             _disposed = true;
             _reader.Dispose();
         }
-
     }
 }

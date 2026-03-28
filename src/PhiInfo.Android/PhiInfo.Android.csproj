@@ -1,26 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\PhiInfo.HttpServer\PhiInfo.HttpServer.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\PhiInfo.HttpServer\PhiInfo.HttpServer.csproj" />
+    </ItemGroup>
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-android</TargetFramework>
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>full</TrimMode>
-    <PublishAot>true</PublishAot>
-    <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
-    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0-android</TargetFramework>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <PublishTrimmed>true</PublishTrimmed>
+        <TrimMode>full</TrimMode>
+        <PublishAot>true</PublishAot>
+        <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
+        <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <SupportedOSPlatformVersion>29</SupportedOSPlatformVersion>
-    <ApplicationTitle>PhiInfo.Android</ApplicationTitle>
-    <ApplicationId>dev.phigros_labs.PhiInfo</ApplicationId>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-  </PropertyGroup>
+    <PropertyGroup>
+        <SupportedOSPlatformVersion>29</SupportedOSPlatformVersion>
+        <ApplicationTitle>PhiInfo.Android</ApplicationTitle>
+        <ApplicationId>dev.phigros_labs.PhiInfo</ApplicationId>
+        <ApplicationVersion>1</ApplicationVersion>
+        <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    </PropertyGroup>
 </Project>
