@@ -81,34 +81,41 @@ namespace PhiInfo.Core
             AssetFileInfo info,
             bool monoFields)
         {
-            var offset = info.GetAbsoluteByteOffset(file);
+            lock (file.Reader)
+            {
+                var offset = info.GetAbsoluteByteOffset(file);
 
-            var template = GetTemplateBaseField(file, info, file.Reader, offset, monoFields);
+                var template = GetTemplateBaseField(file, info, file.Reader, offset, monoFields);
 
-            if (template == null)
-                throw new Exception($"Failed to build template for type {info.TypeId}");
+                if (template == null)
+                    throw new Exception($"Failed to build template for type {info.TypeId}");
 
-            RefTypeManager refMan = new();
-            refMan.FromTypeTree(file.Metadata);
+                RefTypeManager refMan = new();
+                refMan.FromTypeTree(file.Metadata);
 
-            return template.MakeValue(file.Reader, offset, refMan);
+                return template.MakeValue(file.Reader, offset, refMan);
+            }
         }
 
         internal static AssetTypeValueField GetBaseField(AssetsFile file, AssetFileInfo info)
         {
-            var offset = info.GetAbsoluteByteOffset(file);
+            lock (file.Reader)
+            {
+                var offset = info.GetAbsoluteByteOffset(file);
 
-            if (!file.Metadata.TypeTreeEnabled) throw new Exception($"Failed to build template for type {info.TypeId}");
-            var tt = file.Metadata.FindTypeTreeTypeByID(info.TypeId, info.GetScriptIndex(file));
-            if (tt == null || tt.Nodes.Count <= 0)
-                throw new Exception($"Failed to build template for type {info.TypeId}");
-            var template = new AssetTypeTemplateField();
-            template.FromTypeTree(tt);
+                if (!file.Metadata.TypeTreeEnabled)
+                    throw new Exception($"Failed to build template for type {info.TypeId}");
+                var tt = file.Metadata.FindTypeTreeTypeByID(info.TypeId, info.GetScriptIndex(file));
+                if (tt == null || tt.Nodes.Count <= 0)
+                    throw new Exception($"Failed to build template for type {info.TypeId}");
+                var template = new AssetTypeTemplateField();
+                template.FromTypeTree(tt);
 
-            RefTypeManager refMan = new();
-            refMan.FromTypeTree(file.Metadata);
+                RefTypeManager refMan = new();
+                refMan.FromTypeTree(file.Metadata);
 
-            return template.MakeValue(file.Reader, offset, refMan);
+                return template.MakeValue(file.Reader, offset, refMan);
+            }
         }
 
         private AssetTypeTemplateField? GetTemplateBaseField(
