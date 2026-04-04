@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <ItemGroup>
-        <ProjectReference Include="..\PhiInfo.HttpServer\PhiInfo.HttpServer.csproj" />
+        <ProjectReference Include="..\PhiInfo.HttpServer\PhiInfo.HttpServer.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="System.CommandLine" Version="2.0.5" />
+        <PackageReference Include="System.CommandLine" Version="2.0.5"/>
     </ItemGroup>
 
     <PropertyGroup>
@@ -24,7 +24,7 @@
         <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
         <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
     </PropertyGroup>
-    
+
     <PropertyGroup>
         <Version>1.0.1</Version>
         <GitHash>dev</GitHash>
@@ -32,5 +32,5 @@
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     </PropertyGroup>
 
-    <Import Project="PhiInfo.CLI.targets" />
+    <Import Project="PhiInfo.CLI.targets"/>
 </Project>

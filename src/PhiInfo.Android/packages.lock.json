@@ -127,6 +127,22 @@
         "resolved": "10.0.2",
         "contentHash": "kmZPTEiuY0fvobk4fMoL8ylcjbrJB9Oj8NeEfvUprEzZlodupK5MumI04HYkEDDzTHWKbbx+IIZfpz6qmgs4FQ=="
       }
+    },
+    "net10.0-android36.0/android-x64": {
+      "Microsoft.DotNet.ILCompiler": {
+        "type": "Direct",
+        "requested": "[10.0.2, )",
+        "resolved": "10.0.2",
+        "contentHash": "0g8tazNW4q0anSYNl1hnaHGc7+BQXwpNBMx3d5T3JboOVzz4OXZgqbuoBYfn60VtDFtBMNVS2Kfopelpo2pLZA==",
+        "dependencies": {
+          "runtime.linux-x64.Microsoft.DotNet.ILCompiler": "10.0.2"
+        }
+      },
+      "runtime.linux-x64.Microsoft.DotNet.ILCompiler": {
+        "type": "Transitive",
+        "resolved": "10.0.2",
+        "contentHash": "SoewpNOnqVE6jtBS1wv4XK9bFqq0IdbuiNW0VGxjA54FPOFwO0Mg9O/srFws75UZw2kKH4takgkhZIC+mLAv3Q=="
+      }
     }
   }
 }

@@ -48,12 +48,9 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
         var reader = new AssetsFileReader(file);
         AssetBundleFile bun = new();
         bun.Read(reader);
-        if (bun.DataIsCompressed)
-        {
-            bun = BundleHelper.UnpackBundle(bun);
-        }
+        if (bun.DataIsCompressed) bun = BundleHelper.UnpackBundle(bun);
 
-        bun.GetFileRange(0, out long offset, out long size);
+        bun.GetFileRange(0, out var offset, out var size);
         SegmentStream stream = new(bun.DataReader.BaseStream, offset, size);
         AssetsFile infoFile = new();
         infoFile.Read(new AssetsFileReader(stream));
@@ -74,7 +71,6 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
         return ProcessAssetBundle(path, (bun, infoFile) =>
         {
             foreach (var info in infoFile.AssetInfos)
-            {
                 if (info.TypeId == (int)AssetClassID.Texture2D)
                 {
                     var baseField = PhiInfo.GetBaseField(infoFile, info);
@@ -89,7 +85,6 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
                     var image = new Image(format, width, height, data);
                     return image;
                 }
-            }
 
             throw new Exception("No Texture2D found in the asset bundle.");
         });
@@ -100,7 +95,6 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
         return ProcessAssetBundle(path, (bun, infoFile) =>
         {
             foreach (var info in infoFile.AssetInfos)
-            {
                 if (info.TypeId == (int)AssetClassID.AudioClip)
                 {
                     var baseField = PhiInfo.GetBaseField(infoFile, info);
@@ -112,7 +106,6 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
                         (int)dataSize);
                     return new Music(length, data);
                 }
-            }
 
             throw new Exception("No AudioClip found in the asset bundle.");
         });
@@ -123,14 +116,12 @@ public class PhiInfoAsset(CatalogParser catalogParser, Func<string, Stream> getB
         return ProcessAssetBundle(path, (_, infoFile) =>
         {
             foreach (var info in infoFile.AssetInfos)
-            {
                 if (info.TypeId == (int)AssetClassID.TextAsset)
                 {
                     var baseField = PhiInfo.GetBaseField(infoFile, info);
                     var text = baseField["m_Script"].AsString;
                     return new Text(text);
                 }
-            }
 
             throw new Exception("No TextAsset found in the asset bundle.");
         });

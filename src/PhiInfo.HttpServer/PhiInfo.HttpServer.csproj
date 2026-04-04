@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <ItemGroup>
-        <ProjectReference Include="..\PhiInfo.Core\PhiInfo.Core.csproj" />
-        <ProjectReference Include="..\Shua.Zip\Shua.Zip.csproj" />
+        <ProjectReference Include="..\PhiInfo.Core\PhiInfo.Core.csproj"/>
+        <ProjectReference Include="..\Shua.Zip\Shua.Zip.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AssetRipper.TextureDecoder" Version="2.6.1" />
-        <PackageReference Include="Fmod5Sharp" Version="3.1.0" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+        <PackageReference Include="AssetRipper.TextureDecoder" Version="2.6.1"/>
+        <PackageReference Include="Fmod5Sharp" Version="3.1.0"/>
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12"/>
     </ItemGroup>
 
     <PropertyGroup>

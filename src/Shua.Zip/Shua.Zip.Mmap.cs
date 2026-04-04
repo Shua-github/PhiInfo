@@ -2,40 +2,39 @@ using System;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 
-namespace Shua.Zip
+namespace Shua.Zip;
+
+public sealed class MmapReadAt : IReadAt
 {
-    public sealed class MmapReadAt : IReadAt
+    private readonly MemoryMappedFile _mmf;
+
+    public MmapReadAt(string filePath)
     {
-        private readonly MemoryMappedFile _mmf;
+        if (filePath == null) throw new ArgumentNullException(nameof(filePath));
 
-        public long Size { get; }
+        var fileInfo = new FileInfo(filePath);
+        Size = fileInfo.Length;
 
-        public MmapReadAt(string filePath)
-        {
-            if (filePath == null) throw new ArgumentNullException(nameof(filePath));
+        _mmf = MemoryMappedFile.CreateFromFile(
+            filePath,
+            FileMode.Open,
+            null,
+            0,
+            MemoryMappedFileAccess.Read);
+    }
 
-            var fileInfo = new FileInfo(filePath);
-            Size = fileInfo.Length;
+    public long Size { get; }
 
-            _mmf = MemoryMappedFile.CreateFromFile(
-                filePath,
-                FileMode.Open,
-                mapName: null,
-                capacity: 0,
-                MemoryMappedFileAccess.Read);
-        }
+    public Stream OpenRead(long offset, int length)
+    {
+        if (offset < 0 || offset + length > Size)
+            throw new ArgumentOutOfRangeException(nameof(offset), "Offset out of range");
 
-        public Stream OpenRead(long offset, int length)
-        {
-            if (offset < 0 || offset + length > Size)
-                throw new ArgumentOutOfRangeException(nameof(offset), "Offset out of range");
+        return _mmf.CreateViewStream(offset, length, MemoryMappedFileAccess.Read);
+    }
 
-            return _mmf.CreateViewStream(offset, length, MemoryMappedFileAccess.Read);
-        }
-
-        public void Dispose()
-        {
-            _mmf.Dispose();
-        }
+    public void Dispose()
+    {
+        _mmf.Dispose();
     }
 }
