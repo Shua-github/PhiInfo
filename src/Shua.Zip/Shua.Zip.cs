@@ -7,171 +7,176 @@ namespace Shua.Zip;
 
 public sealed class ShuaZip : IDisposable
 {
-    private readonly IReadAt _reader;
-    private readonly long _size;
-    private bool _disposed;
+	private readonly IReadAt _reader;
+	private readonly long _size;
+	private bool _disposed;
 
-    public ShuaZip(IReadAt reader)
-    {
-        _reader = reader;
-        _size = reader.Size;
-        FileEntries = LoadCentralDirectory();
-    }
+	public ShuaZip(IReadAt reader)
+	{
+		_reader = reader;
+		_size = reader.Size;
+		FileEntries = LoadCentralDirectory();
+	}
 
-    public List<FileEntry> FileEntries { get; }
+	public List<FileEntry> FileEntries { get; }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _reader.Dispose();
-    }
+	public void Dispose()
+	{
+		if (_disposed) return;
+		_disposed = true;
+		_reader.Dispose();
+	}
 
-    private List<FileEntry> LoadCentralDirectory()
-    {
-        var eocd = FindEocd();
+	private List<FileEntry> LoadCentralDirectory()
+	{
+		var eocd = FindEocd();
 
-        if (eocd.CentralDirectorySize > int.MaxValue)
-            throw new InvalidOperationException("Central directory too large");
+		if (eocd.CentralDirectorySize > int.MaxValue)
+			throw new InvalidOperationException("Central directory too large");
 
-        var cdData = ReadAt((long)eocd.CentralDirectoryOffset, (int)eocd.CentralDirectorySize);
+		var cdData = ReadAt((long)eocd.CentralDirectoryOffset, (int)eocd.CentralDirectorySize);
 
-        return ParseCentralDirectory(cdData);
-    }
+		return ParseCentralDirectory(cdData);
+	}
 
-    private List<FileEntry> ParseCentralDirectory(byte[] cdData)
-    {
-        var entries = new List<FileEntry>();
-        var position = 0;
+	private List<FileEntry> ParseCentralDirectory(byte[] cdData)
+	{
+		var entries = new List<FileEntry>();
+		var position = 0;
 
-        while (position + 4 <= cdData.Length)
-        {
-            if (!FileEntry.TryReadFromCentralDirectory(cdData, ref position, out var entry)) break;
+		while (position + 4 <= cdData.Length)
+		{
+			if (!FileEntry.TryReadFromCentralDirectory(cdData, ref position, out var entry)) break;
 
-            if (entry != null) entries.Add(entry);
-        }
+			if (entry != null) entries.Add(entry);
+		}
 
-        return entries;
-    }
+		return entries;
+	}
 
-    private EndOfCentralDirectory FindEocd()
-    {
-        var searchStart = Math.Max(0, _size - (65535 + 22));
-        var searchEnd = _size;
+	private EndOfCentralDirectory FindEocd()
+	{
+		var searchStart = Math.Max(0, _size - (65535 + 22));
+		var searchEnd = _size;
 
-        for (var offset = searchEnd - 1; offset >= searchStart; offset--)
-        {
-            if (searchEnd - offset < 22) continue;
+		for (var offset = searchEnd - 1; offset >= searchStart; offset--)
+		{
+			if (searchEnd - offset < 22) continue;
 
-            var data = ReadAt(offset, 22);
+			var data = ReadAt(offset, 22);
 
-            if (data.Length >= 4
-                && data[0] == 0x50
-                && data[1] == 0x4B
-                && data[2] == 0x05
-                && data[3] == 0x06)
-            {
-                var commentLen = data[20] | (data[21] << 8);
-                if (offset + 22 + commentLen == _size) return EndOfCentralDirectory.FromEocd(_reader, offset, data);
-            }
-        }
+			if (data.Length >= 4
+				&& data[0] == 0x50
+				&& data[1] == 0x4B
+				&& data[2] == 0x05
+				&& data[3] == 0x06)
+			{
+				var commentLen = data[20] | (data[21] << 8);
+				if (offset + 22 + commentLen == _size) return EndOfCentralDirectory.FromEocd(_reader, offset, data);
+			}
+		}
 
-        throw new InvalidOperationException("End of Central Directory not found");
-    }
+		throw new InvalidOperationException("End of Central Directory not found");
+	}
 
-    public byte[] ReadFile(FileEntry entry)
-    {
-        using var stream = OpenFileStream(entry);
-        var capacity = 0;
-        if (entry.CompressionMethod.IsStored)
-            capacity = (int)entry.CompressedSize;
-        else if (entry.CompressionMethod.IsDeflate) capacity = (int)entry.UncompressedSize;
+	public byte[] ReadFile(FileEntry entry)
+	{
+		using var stream = OpenFileStream(entry);
+		var capacity = 0;
+		if (entry.CompressionMethod.IsStored)
+			capacity = (int)entry.CompressedSize;
+		else if (entry.CompressionMethod.IsDeflate) capacity = (int)entry.UncompressedSize;
 
-        using var output = new MemoryStream(capacity);
-        stream.CopyTo(output);
-        return output.ToArray();
-    }
+		using var output = new MemoryStream(capacity);
+		stream.CopyTo(output);
+		return output.ToArray();
+	}
 
-    public Stream OpenFileStream(FileEntry entry)
-    {
-        if (entry.LocalHeaderOffset > long.MaxValue)
-            throw new InvalidOperationException("Local header offset too large");
+	public Stream OpenFileStream(FileEntry entry)
+	{
+		if (entry.LocalHeaderOffset > long.MaxValue)
+			throw new InvalidOperationException("Local header offset too large");
 
-        var headerData = ReadAt((long)entry.LocalHeaderOffset, 30);
+		var headerData = ReadAt((long)entry.LocalHeaderOffset, 30);
 
-        if (headerData.Length < 30
-            || headerData[0] != 0x50
-            || headerData[1] != 0x4B
-            || headerData[2] != 0x03
-            || headerData[3] != 0x04)
-            throw new InvalidOperationException("Invalid local file header signature");
+		if (headerData.Length < 30
+			|| headerData[0] != 0x50
+			|| headerData[1] != 0x4B
+			|| headerData[2] != 0x03
+			|| headerData[3] != 0x04)
+		{
+			throw new InvalidOperationException("Invalid local file header signature");
+		}
 
-        var filenameLen = headerData[26] | (headerData[27] << 8);
-        var extraLen = headerData[28] | (headerData[29] << 8);
+		var filenameLen = headerData[26] | (headerData[27] << 8);
+		var extraLen = headerData[28] | (headerData[29] << 8);
 
-        var dataOffset = (long)entry.LocalHeaderOffset + 30L + filenameLen + extraLen;
+		var dataOffset = (long)entry.LocalHeaderOffset + 30L + filenameLen + extraLen;
 
-        if (entry.CompressedSize > int.MaxValue) throw new InvalidOperationException("Compressed size too large");
+		if (entry.CompressedSize > int.MaxValue) throw new InvalidOperationException("Compressed size too large");
 
-        var rawStream = _reader.OpenRead(dataOffset, (int)entry.CompressedSize);
+		var rawStream = _reader.OpenRead(dataOffset, (int)entry.CompressedSize);
 
-        if (entry.CompressionMethod.IsStored) return rawStream;
+		if (entry.CompressionMethod.IsStored) return rawStream;
 
-        if (entry.CompressionMethod.IsDeflate)
-        {
-            if (entry.UncompressedSize > int.MaxValue)
-                throw new InvalidOperationException("Uncompressed size too large");
+		if (entry.CompressionMethod.IsDeflate)
+		{
+			if (entry.UncompressedSize > int.MaxValue)
+				throw new InvalidOperationException("Uncompressed size too large");
 
-            using var deflateStream = new DeflateStream(rawStream, CompressionMode.Decompress, false);
-            var memory = new MemoryStream((int)entry.UncompressedSize);
-            deflateStream.CopyTo(memory);
-            memory.Position = 0;
-            return memory;
-        }
+			using var deflateStream = new DeflateStream(rawStream, CompressionMode.Decompress, false);
+			var memory = new MemoryStream((int)entry.UncompressedSize);
+			deflateStream.CopyTo(memory);
+			memory.Position = 0;
+			return memory;
+		}
 
-        rawStream.Dispose();
-        throw new InvalidOperationException($"Unsupported compression method: {entry.CompressionMethod.Value}");
-    }
+		rawStream.Dispose();
+		throw new InvalidOperationException($"Unsupported compression method: {entry.CompressionMethod.Value}");
+	}
 
-    private byte[] ReadAt(long offset, int length)
-    {
-        if (length == 0) return [];
+	private byte[] ReadAt(long offset, int length)
+	{
+		if (length == 0) return [];
 
-        using var stream = _reader.OpenRead(offset, length);
-        var buffer = new byte[length];
-        var readTotal = 0;
+		using var stream = _reader.OpenRead(offset, length);
+		var buffer = new byte[length];
+		var readTotal = 0;
 
-        while (readTotal < length)
-        {
-            var read = stream.Read(buffer, readTotal, length - readTotal);
-            if (read <= 0) throw new EndOfStreamException("Unexpected end of stream");
+		while (readTotal < length)
+		{
+			var read = stream.Read(buffer, readTotal, length - readTotal);
+			if (read <= 0) throw new EndOfStreamException("Unexpected end of stream");
 
-            readTotal += read;
-        }
+			readTotal += read;
+		}
 
-        return buffer;
-    }
+		return buffer;
+	}
 
-    public Stream OpenFileStreamByName(string fileName)
-    {
-        if (string.IsNullOrEmpty(fileName))
-            throw new ArgumentNullException(nameof(fileName));
+	public Stream OpenFileStreamByName(string fileName)
+	{
+		var entry = TryFindEntry(fileName) ??
+					throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
 
-        var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ??
-                    throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
+		return OpenFileStream(entry);
+	}
 
-        return OpenFileStream(entry);
-    }
+	public FileEntry? TryFindEntry(string fileName)
+	{
+		if (string.IsNullOrEmpty(fileName))
+			throw new ArgumentNullException(nameof(fileName));
+		return FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase));
+	}
 
+	public byte[] ReadFileByName(string fileName)
+	{
+		if (string.IsNullOrEmpty(fileName))
+			throw new ArgumentNullException(nameof(fileName));
 
-    public byte[] ReadFileByName(string fileName)
-    {
-        if (string.IsNullOrEmpty(fileName))
-            throw new ArgumentNullException(nameof(fileName));
+		var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ??
+					throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
 
-        var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ??
-                    throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
-
-        return ReadFile(entry);
-    }
+		return ReadFile(entry);
+	}
 }

@@ -1,111 +1,143 @@
-﻿using System;
+﻿using PhiInfo.Processing;
+using PhiInfo.Processing.Type;
+using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
 using System.Reflection;
 using System.Threading;
-using PhiInfo.Processing;
-using PhiInfo.Processing.Type;
 
 namespace PhiInfo.CLI;
 
 internal class Program
 {
-    private static AppInfo GetAppInfo()
-    {
-        var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion ?? "Unknown";
-        return new AppInfo(version, "CLI");
-    }
+	private static AppInfo GetAppInfo()
+	{
+		var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+			?.InformationalVersion ?? "Unknown";
+		return new AppInfo(version, "CLI");
+	}
 
-    private static int Main(string[] args)
-    {
-        Option<FileInfo> apkOption = new("--apk")
-        {
-            Description = "Path to the APK file",
-            Required = true
-        };
+	private static int Main(string[] args)
+	{
+		Option<FileInfo> apkOption = new("--apk")
+		{
+			Description = "Path to the APK file",
+			Required = true
+		};
 
-        Option<FileInfo> classDataOption = new("--classdata")
-        {
-            Description = "Path to the class data TPK file",
-            DefaultValueFactory = _ => new FileInfo("./classdata.tpk")
-        };
+		Option<FileInfo> obbOption = new("--obb")
+		{
+			Description = "Optional. Path to the main obb file.",
+			Required = false
+		};
 
-        Option<uint> portOption = new("--port")
-        {
-            Description = "Port number for the HTTP server",
-            DefaultValueFactory = _ => 41669
-        };
+		Option<FileInfo> auxObbOption = new("--aux-obb")
+		{
+			Description = "Optional. Path to the auxiliary (patch) obb file.",
+			Required = false
+		};
 
-        Option<string> hostOption = new("--host")
-        {
-            Description = "Host for the HTTP server",
-            DefaultValueFactory = _ => "127.0.0.1"
-        };
+		Option<FileInfo> classDataOption = new("--classdata")
+		{
+			Description = "Path to the class data TPK file",
+			DefaultValueFactory = _ => new FileInfo("./classdata.tpk")
+		};
 
-        RootCommand rootCommand = new("PhiInfo HTTP Server CLI");
-        rootCommand.Options.Add(apkOption);
-        rootCommand.Options.Add(classDataOption);
-        rootCommand.Options.Add(portOption);
-        rootCommand.Options.Add(hostOption);
+		Option<uint> portOption = new("--port")
+		{
+			Description = "Port number for the HTTP server",
+			DefaultValueFactory = _ => 41669
+		};
 
-        using var exitEvent = new ManualResetEventSlim(false);
+		Option<string> hostOption = new("--host")
+		{
+			Description = "Host for the HTTP server",
+			DefaultValueFactory = _ => "127.0.0.1"
+		};
 
-        rootCommand.SetAction(parseResult =>
-        {
-            var apkFile = parseResult.GetValue(apkOption);
-            var classDataFile = parseResult.GetValue(classDataOption);
-            var port = parseResult.GetValue(portOption);
-            var host = parseResult.GetValue(hostOption);
+#pragma warning disable IDE0028 // Simplify collection initialization
+		// visual studio have some problems with this
+		RootCommand rootCommand = new("PhiInfo HTTP Server CLI");
+#pragma warning restore IDE0028 // Simplify collection initialization
+		rootCommand.Options.Add(apkOption);
+		rootCommand.Options.Add(obbOption);
+		rootCommand.Options.Add(auxObbOption);
+		rootCommand.Options.Add(classDataOption);
+		rootCommand.Options.Add(portOption);
+		rootCommand.Options.Add(hostOption);
 
-            if (apkFile is not { Exists: true })
-            {
-                Console.WriteLine($"Error: APK file not found: {apkFile?.FullName ?? "<null>"}");
-                return;
-            }
+		using var exitEvent = new ManualResetEventSlim(false);
 
-            if (classDataFile is not { Exists: true })
-            {
-                Console.WriteLine($"Error: Class data file not found: {classDataFile?.FullName ?? "<null>"}");
-                return;
-            }
+		rootCommand.SetAction(parseResult =>
+		{
+			var apkFile = parseResult.GetValue(apkOption);
+			var classDataFile = parseResult.GetValue(classDataOption);
+			var port = parseResult.GetValue(portOption);
+			var host = parseResult.GetValue(hostOption);
 
-            if (host == null)
-            {
-                Console.WriteLine("Error: Host is null");
-                return;
-            }
+			if (apkFile is not { Exists: true })
+			{
+				Console.WriteLine($"Error: APK file not found: {apkFile?.FullName ?? "<null>"}");
+				return;
+			}
 
-            using var server = PhiInfoHttpServer.FromApkPathAndCldb(apkFile.FullName,
-                File.OpenRead(classDataFile.FullName), GetAppInfo(), port, host);
+			if (classDataFile is not { Exists: true })
+			{
+				Console.WriteLine($"Error: Class data file not found: {classDataFile?.FullName ?? "<null>"}");
+				return;
+			}
 
-            server.OnRequestError += (sender, ex) => { Console.WriteLine($"Server error: {ex}"); };
+			if (host == null)
+			{
+				Console.WriteLine("Error: Host is null");
+				return;
+			}
 
-            // 注册事件
-            Console.CancelKeyPress += OnCancelKeyPress;
+			List<string> packagePaths = [apkFile.FullName];
+			if (parseResult.GetValue(obbOption) is { Exists: true } obbFile)
+			{
+				packagePaths.Add(obbFile.FullName);
+			}
+			if (parseResult.GetValue(auxObbOption) is { Exists: true } auxObbFile)
+			{
+				packagePaths.Add(auxObbFile.FullName);
+			}
 
-            Console.WriteLine("--------------------------------------------");
-            Console.WriteLine($"Server is running on http://{host}:{port}/");
-            Console.WriteLine("Press Ctrl+C to stop the server.");
-            Console.WriteLine("--------------------------------------------");
+			using var server = PhiInfoHttpServer.FromPackagePathsAndCldb(
+				packagePaths,
+				File.OpenRead(classDataFile.FullName),
+				GetAppInfo(),
+				port,
+				host);
 
-            exitEvent.Wait();
+			server.OnRequestError += (sender, ex) => { Console.WriteLine($"Server error: {ex}"); };
+
+			// 注册事件
+			Console.CancelKeyPress += OnCancelKeyPress;
+
+			Console.WriteLine("--------------------------------------------");
+			Console.WriteLine($"Server is running on http://{host}:{port}/");
+			Console.WriteLine("Press Ctrl+C to stop the server.");
+			Console.WriteLine("--------------------------------------------");
+
+			exitEvent.Wait();
 
 
-            Console.WriteLine("[System] Server stopped successfully.");
-            return;
+			Console.WriteLine("[System] Server stopped successfully.");
+			return;
 
-            void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
-            {
-                e.Cancel = true;
+			void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+			{
+				e.Cancel = true;
 
-                Console.WriteLine("\n[System] Shutdown signal received.");
-                Console.WriteLine("[System] Stopping server...");
+				Console.WriteLine("\n[System] Shutdown signal received.");
+				Console.WriteLine("[System] Stopping server...");
 
-                exitEvent.Set();
-            }
-        });
+				exitEvent.Set();
+			}
+		});
 
-        return rootCommand.Parse(args).Invoke();
-    }
+		return rootCommand.Parse(args).Invoke();
+	}
 }
