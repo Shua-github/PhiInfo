@@ -140,6 +140,7 @@ public class AssetProvider(CatalogProvider catalogProvider, IAssetDataProvider d
     public List<string> List()
     {
         return catalogProvider.GetAll()
+            .Where(v => v.Value is string)
             .Select(v => v.Key)
             .OfType<string>()
             .ToList();
