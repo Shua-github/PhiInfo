@@ -1,9 +1,9 @@
 ﻿using PhiInfo.Processing;
 using PhiInfo.Processing.Type;
 using System;
-using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 
@@ -20,22 +20,16 @@ internal class Program
 
 	private static int Main(string[] args)
 	{
-		Option<FileInfo> apkOption = new("--apk")
+		Option<FileInfo[]> packagesOption = new("--package")
 		{
-			Description = "Path to the APK file",
+			Description = """
+				Path to package files. A package file can be APK, main OBB, or patch OBB. 
+				If your copy of Phigros is downloaded from Google play require all of those 
+				or the first two files.
+				If your copy of Phigros is downloaded from TapTap, you only need to provide 
+				the APK file, since TapTap's APK already contains all the data.
+				""",
 			Required = true
-		};
-
-		Option<FileInfo> obbOption = new("--obb")
-		{
-			Description = "Optional. Path to the main obb file.",
-			Required = false
-		};
-
-		Option<FileInfo> auxObbOption = new("--aux-obb")
-		{
-			Description = "Optional. Path to the auxiliary (patch) obb file.",
-			Required = false
 		};
 
 		Option<FileInfo> classDataOption = new("--classdata")
@@ -60,9 +54,7 @@ internal class Program
 		// visual studio have some problems with this
 		RootCommand rootCommand = new("PhiInfo HTTP Server CLI");
 #pragma warning restore IDE0028 // Simplify collection initialization
-		rootCommand.Options.Add(apkOption);
-		rootCommand.Options.Add(obbOption);
-		rootCommand.Options.Add(auxObbOption);
+		rootCommand.Options.Add(packagesOption);
 		rootCommand.Options.Add(classDataOption);
 		rootCommand.Options.Add(portOption);
 		rootCommand.Options.Add(hostOption);
@@ -71,14 +63,20 @@ internal class Program
 
 		rootCommand.SetAction(parseResult =>
 		{
-			var apkFile = parseResult.GetValue(apkOption);
+			var packages = parseResult.GetValue(packagesOption)!;
 			var classDataFile = parseResult.GetValue(classDataOption);
 			var port = parseResult.GetValue(portOption);
 			var host = parseResult.GetValue(hostOption);
 
-			if (apkFile is not { Exists: true })
+			var anyNotFound = packages.FirstOrDefault(p => !p.Exists);
+			if (anyNotFound is not null)
 			{
-				Console.WriteLine($"Error: APK file not found: {apkFile?.FullName ?? "<null>"}");
+				Console.WriteLine($"Error: Package file not found: {anyNotFound.FullName}");
+				return;
+			}
+			if (packages.Length == 0)
+			{
+				Console.WriteLine("Error: No package files provided");
 				return;
 			}
 
@@ -94,18 +92,8 @@ internal class Program
 				return;
 			}
 
-			List<string> packagePaths = [apkFile.FullName];
-			if (parseResult.GetValue(obbOption) is { Exists: true } obbFile)
-			{
-				packagePaths.Add(obbFile.FullName);
-			}
-			if (parseResult.GetValue(auxObbOption) is { Exists: true } auxObbFile)
-			{
-				packagePaths.Add(auxObbFile.FullName);
-			}
-
 			using var server = PhiInfoHttpServer.FromPackagePathsAndCldb(
-				packagePaths,
+				packages.Select(x => x.FullName),
 				File.OpenRead(classDataFile.FullName),
 				GetAppInfo(),
 				port,
