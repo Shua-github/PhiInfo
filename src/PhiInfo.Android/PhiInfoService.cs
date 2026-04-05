@@ -1,28 +1,13 @@
 using System;
-using System.IO;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Util;
-using global.PhiInfo.HttpServer.Type;
+using PhiInfo.Processing;
+using PhiInfo.Processing.Type;
 
 namespace PhiInfo.Android;
-
-public class AndroidHttpServer(string apkPath, Stream cldbStream, string version) : HttpServer(apkPath, cldbStream)
-{
-    private const string Tag = "PhiInfoHttpServer";
-
-    protected override void Log(string msg)
-    {
-        global::Android.Util.Log.Info(Tag, msg);
-    }
-
-    protected override AppInfo GetAppInfo()
-    {
-        return new AppInfo(version, "Android");
-    }
-}
 
 [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeSpecialUse)]
 public class HttpServerService : Service
@@ -32,12 +17,18 @@ public class HttpServerService : Service
     private const string ChannelId = "phiinfo_channel";
     private const string TargetPkg = "com.PigeonGames.Phigros";
 
-    private AndroidHttpServer? _server;
+    private PhiInfoHttpServer? _server;
 
     public override void OnCreate()
     {
         base.OnCreate();
         CreateNotificationChannel();
+    }
+
+    private AppInfo GetAppInfo()
+    {
+        if (PackageName is null) throw new Exception("包名为null");
+        return new AppInfo(PackageManager?.GetPackageInfo(PackageName, 0)?.VersionName ?? "Unknown", "Android");
     }
 
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
@@ -67,15 +58,9 @@ public class HttpServerService : Service
 
             var appInfo = PackageManager?.GetApplicationInfo(TargetPkg, 0);
             var apkPath = appInfo?.SourceDir ?? throw new Exception("apk路径为null");
-            if (PackageName is null) throw new Exception("包名为null");
-
-            var versionName = PackageManager?.GetPackageInfo(PackageName, 0)?.VersionName ?? "Unknown";
-
             var cldbStream = Assets?.Open("classdata.tpk") ?? throw new Exception("cldb资源找不到");
 
-            _server = new AndroidHttpServer(apkPath, cldbStream, versionName);
-
-            _ = _server.Start(41669, "127.0.0.1");
+            _server = PhiInfoHttpServer.FromApkPathAndCldb(apkPath, cldbStream, GetAppInfo());
 
             Log.Info(Tag, "HTTP Server started successfully.");
         }

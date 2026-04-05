@@ -98,7 +98,7 @@
           "Samboy063.LibCpp2IL": "[2022.1.0-pre-release.19, )"
         }
       },
-      "phiinfo.httpserver": {
+      "phiinfo.processing": {
         "type": "Project",
         "dependencies": {
           "AssetRipper.TextureDecoder": "[2.6.1, )",

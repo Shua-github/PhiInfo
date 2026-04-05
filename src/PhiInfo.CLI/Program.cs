@@ -3,22 +3,20 @@ using System.CommandLine;
 using System.IO;
 using System.Reflection;
 using System.Threading;
-using global.PhiInfo.HttpServer.Type;
+using PhiInfo.Processing;
+using PhiInfo.Processing.Type;
 
 namespace PhiInfo.CLI;
 
-public class CliHttpServer(string apkPath, Stream cldbStream) : HttpServer(apkPath, cldbStream)
+internal class Program
 {
-    protected override AppInfo GetAppInfo()
+    private static AppInfo GetAppInfo()
     {
-        var version = typeof(CliHttpServer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion ?? "Unknown";
         return new AppInfo(version, "CLI");
     }
-}
 
-internal class Program
-{
     private static int Main(string[] args)
     {
         Option<FileInfo> apkOption = new("--apk")
@@ -78,10 +76,10 @@ internal class Program
                 return;
             }
 
-            using var cldb = File.OpenRead(classDataFile.FullName);
-            using var server = new CliHttpServer(apkFile.FullName, cldb);
+            using var server = PhiInfoHttpServer.FromApkPathAndCldb(apkFile.FullName,
+                File.OpenRead(classDataFile.FullName), GetAppInfo(), port, host);
 
-            _ = server.Start(port, host);
+            server.OnRequestError += (sender, ex) => { Console.WriteLine($"Server error: {ex}"); };
 
             // 注册事件
             Console.CancelKeyPress += OnCancelKeyPress;
@@ -104,7 +102,6 @@ internal class Program
                 Console.WriteLine("\n[System] Shutdown signal received.");
                 Console.WriteLine("[System] Stopping server...");
 
-                server.Stop();
                 exitEvent.Set();
             }
         });
