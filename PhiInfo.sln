@@ -1,0 +1,55 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37111.16
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shua.Zip", ".\src\Shua.Zip\Shua.Zip.csproj", "{F6CEA947-ADAB-13D7-CCCC-3FF3E7C755E6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhiInfo.Processing", ".\src\PhiInfo.Processing\PhiInfo.Processing.csproj", "{82806669-CA9E-C997-4443-8B79DD28FCC1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhiInfo.Core", ".\src\PhiInfo.Core\PhiInfo.Core.csproj", "{F848DC36-3EF4-2654-FD49-E612138A74DE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhiInfo.CLI", ".\src\PhiInfo.CLI\PhiInfo.CLI.csproj", "{A55030DB-8A51-CA94-07D6-3F2AAD128FB8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhiInfo.Android", ".\src\PhiInfo.Android\PhiInfo.Android.csproj", "{C3F676BB-AFBD-2DB7-7FE6-D3DDC34DE77A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		src\.editorconfig = src\.editorconfig
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F6CEA947-ADAB-13D7-CCCC-3FF3E7C755E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6CEA947-ADAB-13D7-CCCC-3FF3E7C755E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6CEA947-ADAB-13D7-CCCC-3FF3E7C755E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6CEA947-ADAB-13D7-CCCC-3FF3E7C755E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{82806669-CA9E-C997-4443-8B79DD28FCC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82806669-CA9E-C997-4443-8B79DD28FCC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82806669-CA9E-C997-4443-8B79DD28FCC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82806669-CA9E-C997-4443-8B79DD28FCC1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F848DC36-3EF4-2654-FD49-E612138A74DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F848DC36-3EF4-2654-FD49-E612138A74DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F848DC36-3EF4-2654-FD49-E612138A74DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F848DC36-3EF4-2654-FD49-E612138A74DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A55030DB-8A51-CA94-07D6-3F2AAD128FB8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A55030DB-8A51-CA94-07D6-3F2AAD128FB8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A55030DB-8A51-CA94-07D6-3F2AAD128FB8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A55030DB-8A51-CA94-07D6-3F2AAD128FB8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C3F676BB-AFBD-2DB7-7FE6-D3DDC34DE77A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C3F676BB-AFBD-2DB7-7FE6-D3DDC34DE77A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C3F676BB-AFBD-2DB7-7FE6-D3DDC34DE77A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C3F676BB-AFBD-2DB7-7FE6-D3DDC34DE77A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A641362E-74D0-498B-819E-A8886AE974EF}
+	EndGlobalSection
+EndGlobal
