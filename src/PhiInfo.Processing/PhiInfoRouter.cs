@@ -24,13 +24,14 @@ namespace PhiInfo.Processing;
 [JsonSerializable(typeof(AllInfo))]
 [JsonSerializable(typeof(Language))]
 [JsonSerializable(typeof(List<Language>))]
+[JsonSerializable(typeof(Dictionary<string,string>))]
 public partial class JsonContext : JsonSerializerContext
 {
 }
 
 public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
 {
-    private static readonly Response MissPath = new(
+    private static readonly Response MissParam = new(
         400,
         "text/plain",
         "Missing parameter"u8.ToArray()
@@ -43,36 +44,34 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
 
     public Response Handle(string path, Dictionary<string, string> query)
     {
+        
+        if (path == "/asset")
+        {
+            var dict = context.Catalog.GetAll()
+                .Where(v => v.Key.IsString && v.Value != null && v.Value.Value.IsString)
+                .ToDictionary(
+                    v => v.Key.Str!,
+                    v => v.Value!.Value.Str
+                );
+
+            var json = SerializeJson(dict, _jsonContext.DictionaryStringString);
+            return new Response(200, "application/json", json);
+        }
+        if (path.StartsWith("/asset/"))
+        {
+            var segments = path["/asset/".Length..]
+                .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            if (segments.Length <= 1)
+                return MissParam;
+
+            var type = segments[^1];
+            var assetPath = string.Join('/', segments.Take(segments.Length - 1));
+
+            return HandleAsset(assetPath, type);
+        }
         switch (path)
         {
-            case "/asset/text":
-                if (!query.TryGetValue("path", out var textPath) || string.IsNullOrEmpty(textPath))
-                    return MissPath;
-
-                var textData = context.Asset.GetTextRaw(textPath);
-                return new Response(200, "text/plain", Encoding.UTF8.GetBytes(textData.content));
-
-            case "/asset/music":
-                if (!query.TryGetValue("path", out var musicPath) || string.IsNullOrEmpty(musicPath))
-                    return MissPath;
-
-                var rawMusic = context.Asset.GetMusicRaw(musicPath);
-                var musicData = PhiInfoDecoders.DecoderMusic(rawMusic);
-                return new Response(200, "audio/ogg", musicData);
-
-            case "/asset/image":
-                if (!query.TryGetValue("path", out var imagePath) || string.IsNullOrEmpty(imagePath))
-                    return MissPath;
-
-                var bmpData = PhiInfoDecoders.DecoderImageToBmp(
-                    context.Asset.GetImageRaw(imagePath)
-                );
-                return new Response(200, "image/bmp", bmpData);
-
-            case "/asset/list":
-                var assetList = SerializeJson(context.Asset.List(), _jsonContext.ListString);
-                return new Response(200, "application/json", assetList);
-
             case "/info/songs":
                 var songs = SerializeJson(context.Info.ExtractSongInfo(), _jsonContext.ListSongInfo);
                 return new Response(200, "application/json", songs);
@@ -94,16 +93,7 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
                 return new Response(200, "application/json", chapters);
 
             case "/info/all":
-                var allInfo = new AllInfo(
-                    context.Info.GetPhiVersion(),
-                    context.Info.ExtractSongInfo(),
-                    context.Info.ExtractCollection(),
-                    context.Info.ExtractAvatars(),
-                    context.Info.ExtractTips(),
-                    context.Info.ExtractChapters()
-                );
-
-                var allData = SerializeJson(allInfo, _jsonContext.AllInfo);
+                var allData = SerializeJson(context.Info.ExtractAllInfo(), _jsonContext.AllInfo);
                 return new Response(200, "application/json", allData);
 
             case "/info/version":
@@ -115,19 +105,19 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
                 var serverData = SerializeJson(serverInfo, _jsonContext.ServerInfo);
                 return new Response(200, "application/json", serverData);
 
-            case "/lang/get":
+            case "/lang/state":
                 var currentLang = context.Language.ToString();
                 return new Response(200, "text/plain", Encoding.UTF8.GetBytes(currentLang));
 
             case "/lang/set":
                 if (!query.TryGetValue("lang", out var langStr) || string.IsNullOrEmpty(langStr))
-                    return MissPath;
+                    return MissParam;
 
                 if (!Enum.TryParse<Language>(langStr, true, out var lang))
                     return new Response(400, "text/plain", "Invalid language"u8.ToArray());
 
                 context.Language = lang;
-                return new Response(200, "text/plain", "Language set"u8.ToArray());
+                return new Response(204, null, null);
 
             case "/lang/list":
                 var languages = Enum.GetValues<Language>().Select(l => l.ToString()).ToList();
@@ -154,5 +144,29 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
             ?.InformationalVersion ?? "Unknown";
 
         return new ServerInfo(version, rid, appInfo);
+    }
+    
+    private Response HandleAsset(string name, string type)
+    {
+        switch (type.ToLowerInvariant())
+        {
+            case "text":
+                var textData = context.Asset.GetTextRaw(name);
+                return new Response(200, "text/plain", Encoding.UTF8.GetBytes(textData.content));
+
+            case "music":
+                var rawMusic = context.Asset.GetMusicRaw(name);
+                var musicData = PhiInfoDecoders.DecoderMusic(rawMusic);
+                return new Response(200, "audio/ogg", musicData);
+
+            case "image":
+                var bmpData = PhiInfoDecoders.DecoderImageToBmp(
+                    context.Asset.GetImageRaw(name)
+                );
+                return new Response(200, "image/bmp", bmpData);
+
+            default:
+                return new Response(400, "text/plain", "Invalid asset type"u8.ToArray());
+        }
     }
 }

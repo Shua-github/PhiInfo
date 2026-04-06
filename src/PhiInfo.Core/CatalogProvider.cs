@@ -2,14 +2,23 @@
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Collections.Frozen;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PhiInfo.Core.Type;
 
 namespace PhiInfo.Core;
+
+public record struct Key
+{
+    public CatalogKeyType Kind;
+    public byte Byte;
+    public string? Str;
+    
+    public bool IsString => Kind == CatalogKeyType.Utf8String || Kind == CatalogKeyType.UnicodeString;
+}
 
 public enum CatalogKeyType : byte
 {
@@ -25,159 +34,134 @@ public partial class JsonContext : JsonSerializerContext
 
 public sealed class CatalogProvider
 {
-    private readonly ImmutableDictionary<object, object?> _entries;
-    private readonly Dictionary<string, object?> _stringIndex;
+    // 现在存储 Key 结构体
+    private readonly ImmutableArray<KeyValuePair<Key, Key?>> _entries;
+    private readonly FrozenDictionary<string, Key?> _stringIndex;
 
     public CatalogProvider(ICatalogDataProvider dataProvider)
     {
         using var catalog = dataProvider.GetCatalog();
-
-        var json = JsonSerializer.Deserialize(
-                       catalog,
-                       JsonContext.Default.Catalog)
-                   ?? throw new InvalidOperationException();
-
-        var keyData = Convert.FromBase64String(json.m_KeyDataString);
-        var bucketData = Convert.FromBase64String(json.m_BucketDataString);
-        var entryData = Convert.FromBase64String(json.m_EntryDataString);
-
-        var dict = Parse(keyData, bucketData, entryData);
-
-        _entries = dict.ToImmutableDictionary();
-
-        _stringIndex = new Dictionary<string, object?>(dict.Count);
-
-        foreach (var kv in dict)
+        var json = JsonSerializer.Deserialize(catalog, JsonContext.Default.Catalog) 
+                   ?? throw new InvalidOperationException("Failed to deserialize catalog.");
+        
+        ReadOnlySpan<byte> keyData = Convert.FromBase64String(json.m_KeyDataString);
+        ReadOnlySpan<byte> bucketData = Convert.FromBase64String(json.m_BucketDataString);
+        ReadOnlySpan<byte> entryData = Convert.FromBase64String(json.m_EntryDataString);
+        
+        var rawEntries = ParseToEntryList(keyData, bucketData, entryData);
+        var resultList = ResolveReferences(rawEntries);
+        
+        _entries = resultList.ToImmutableArray();
+        
+        var dictBuilder = new Dictionary<string, Key?>(resultList.Count);
+        foreach (var kvp in resultList)
         {
-            if (kv.Key is byte)
-                continue;
+            if (kvp.Key.IsString && kvp.Key.Str != null)
+            {
+                dictBuilder[kvp.Key.Str] = kvp.Value;
+            }
+        }
+        _stringIndex = dictBuilder.ToFrozenDictionary();
+    }
+    
+    private readonly struct RawEntry
+    {
+        public readonly Key Key; // 使用结构体
+        public readonly ushort RawIndex;
 
-            var keyStr = kv.Key.ToString()!;
-
-            if (!_stringIndex.ContainsKey(keyStr))
-                _stringIndex[keyStr] = kv.Value;
+        public RawEntry(Key key, ushort rawIndex)
+        {
+            Key = key;
+            RawIndex = rawIndex;
         }
     }
 
-    public IReadOnlyDictionary<object, object?> GetAll()
+    private static List<RawEntry> ParseToEntryList(
+        ReadOnlySpan<byte> keyData,
+        ReadOnlySpan<byte> bucketData,
+        ReadOnlySpan<byte> entryData)
     {
-        return _entries;
-    }
+        if (bucketData.Length < 4) throw new InvalidDataException("Bucket data too short.");
 
-    public bool TryGet(string key, out object? value)
-    {
-        return _stringIndex.TryGetValue(key, out value);
-    }
+        int bucketCount = BinaryPrimitives.ReadInt32LittleEndian(bucketData);
+        var result = new List<RawEntry>(bucketCount);
+        int bucketOffset = 4;
 
-    public bool TryGet(object key, out object? value)
-    {
-        return _entries.TryGetValue(key, out value);
-    }
-
-    public object? Get(string key)
-    {
-        return _stringIndex.TryGetValue(key, out var value) ? value : null;
-    }
-
-    private static Dictionary<object, object?> Parse(
-        byte[] keyData,
-        byte[] bucketData,
-        byte[] entryData)
-    {
-        var reader = new BinaryReader(new MemoryStream(bucketData));
-        var temp = new List<(object Key, ushort ValueIndex)>();
-
-        var bucketCount = reader.ReadInt32();
-
-        for (var i = 0; i < bucketCount; i++)
+        for (int i = 0; i < bucketCount; i++)
         {
-            var keyPos = reader.ReadInt32();
+            int keyPos = BinaryPrimitives.ReadInt32LittleEndian(bucketData.Slice(bucketOffset, 4));
+            bucketOffset += 4;
 
-            if (keyPos < 0 || keyPos >= keyData.Length)
-                throw new InvalidDataException("Invalid key position.");
+            if (keyPos < 0 || keyPos >= keyData.Length) throw new InvalidDataException("Invalid key position.");
 
-            var keyType = (CatalogKeyType)keyData[keyPos++];
-            object key;
-
-            switch (keyType)
+            CatalogKeyType type = (CatalogKeyType)keyData[keyPos++];
+            Key key = new Key { Kind = type };
+            
+            switch (type)
             {
                 case CatalogKeyType.Utf8String:
                 case CatalogKeyType.UnicodeString:
-                {
-                    if (keyPos + 4 > keyData.Length)
-                        throw new InvalidDataException("Invalid key length.");
-
-                    var len = BinaryPrimitives.ReadInt32LittleEndian(keyData.AsSpan(keyPos));
-                    keyPos += 4;
-
-                    if (keyPos + len > keyData.Length)
-                        throw new InvalidDataException("Invalid string length.");
-
-                    var encoding = keyType == CatalogKeyType.UnicodeString
-                        ? Encoding.Unicode
-                        : Encoding.UTF8;
-
-                    key = encoding.GetString(keyData, keyPos, len);
+                    key.Str = ParseStringValue(type, keyData, ref keyPos);
                     break;
-                }
-
                 case CatalogKeyType.Byte:
-                    if (keyPos >= keyData.Length)
-                        throw new InvalidDataException("Invalid byte key.");
-                    key = keyData[keyPos];
+                    key.Byte = keyData[keyPos++];
                     break;
-
                 default:
-                    throw new InvalidOperationException();
+                    throw new NotSupportedException($"Unknown catalog key type: {type}");
             }
 
-            var entryCount = reader.ReadInt32();
-            var entryPos = reader.ReadInt32();
+            int entryCount = BinaryPrimitives.ReadInt32LittleEndian(bucketData.Slice(bucketOffset, 4));
+            bucketOffset += 4;
+            int entryPos = BinaryPrimitives.ReadInt32LittleEndian(bucketData.Slice(bucketOffset, 4));
+            bucketOffset += 4;
+            
+            bucketOffset += (entryCount - 1) * 4;
 
-            for (var j = 1; j < entryCount; j++)
-                reader.ReadInt32();
+            int entryStart = 4 + 28 * entryPos;
+            if (entryStart + 8 + 2 > entryData.Length) throw new InvalidDataException("Entry data bounds exceeded.");
+            
+            ushort rawIndex = BinaryPrimitives.ReadUInt16LittleEndian(entryData.Slice(entryStart + 8, 2));
 
-            temp.Add((key, (ushort)entryPos));
+            result.Add(new RawEntry(key, rawIndex));
         }
-
-        var result = new Dictionary<object, object?>();
-
-        foreach (var (key, valueIndex) in temp)
-        {
-            var entryStart = 4 + 28 * valueIndex;
-
-            if (entryStart + 9 >= entryData.Length)
-                throw new InvalidDataException("Invalid entry data.");
-
-            var raw = (ushort)(
-                entryData[entryStart + 8] |
-                (entryData[entryStart + 9] << 8));
-
-            result[key] = raw;
-        }
-
-        ResolveReferences(result);
 
         return result;
     }
 
-    private static void ResolveReferences(Dictionary<object, object?> table)
+    private static string ParseStringValue(CatalogKeyType type, ReadOnlySpan<byte> data, ref int pos)
     {
-        var keys = table.Keys.ToList();
-
-        for (var i = 0; i < keys.Count; i++)
-        {
-            var key = keys[i];
-            var value = table[key];
-
-            if (value is not ushort index)
-                continue;
-
-            if (index == ushort.MaxValue || index >= table.Count)
-                continue;
-
-            var resolvedKey = table.ElementAt(index).Key;
-            table[key] = resolvedKey;
-        }
+        int len = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos, 4));
+        pos += 4;
+        
+        string val = type == CatalogKeyType.UnicodeString
+            ? Encoding.Unicode.GetString(data.Slice(pos, len))
+            : Encoding.UTF8.GetString(data.Slice(pos, len));
+            
+        pos += len;
+        return val;
     }
+
+    private static List<KeyValuePair<Key, Key?>> ResolveReferences(List<RawEntry> rawEntries)
+    {
+        var result = new List<KeyValuePair<Key, Key?>>(rawEntries.Count);
+        
+        for (int i = 0; i < rawEntries.Count; i++)
+        {
+            var entry = rawEntries[i];
+            Key? resolvedValue = null;
+
+            if (entry.RawIndex != ushort.MaxValue && entry.RawIndex < rawEntries.Count)
+            {
+                resolvedValue = rawEntries[entry.RawIndex].Key;
+            }
+
+            result.Add(new KeyValuePair<Key, Key?>(entry.Key, resolvedValue));
+        }
+
+        return result;
+    }
+
+    public ImmutableArray<KeyValuePair<Key, Key?>> GetAll() => _entries;
+    
+    public Key? Get(string key) => _stringIndex.GetValueOrDefault(key, null);
 }

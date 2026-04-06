@@ -1,14 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
 using PhiInfo.Core.Type;
 
 namespace PhiInfo.Core;
 
-public class AssetProvider(CatalogProvider catalogProvider, IAssetDataProvider dataProvider)
+public class AssetProvider(IAssetDataProvider dataProvider)
 {
     private static void ReadExactly(Stream stream, byte[] buffer, int offset, int count)
     {
@@ -41,9 +39,9 @@ public class AssetProvider(CatalogProvider catalogProvider, IAssetDataProvider d
         return buffer;
     }
 
-    private MappedAssetBundle LoadBundle(string path)
+    private MappedAssetBundle LoadBundle(string name)
     {
-        var file = GetBundle(path);
+        var file = dataProvider.GetBundle(name);
 
         var reader = new AssetsFileReader(file);
         var bundleFile = new AssetBundleFile();
@@ -70,12 +68,12 @@ public class AssetProvider(CatalogProvider catalogProvider, IAssetDataProvider d
         return null;
     }
 
-    public Image GetImageRaw(string path)
+    public Image GetImageRaw(string name)
     {
-        using var bundle = LoadBundle(path);
+        using var bundle = LoadBundle(name);
 
         var field = FindAssetField(bundle, AssetClassID.Texture2D)
-                    ?? throw new ArgumentException("No Texture2D found.", nameof(path));
+                    ?? throw new ArgumentException("No Texture2D found.", nameof(name));
 
         var width = field["m_Width"].AsUInt;
         var height = field["m_Height"].AsUInt;
@@ -95,12 +93,12 @@ public class AssetProvider(CatalogProvider catalogProvider, IAssetDataProvider d
         return new Image(format, width, height, data);
     }
 
-    public Music GetMusicRaw(string path)
+    public Music GetMusicRaw(string name)
     {
-        using var bundle = LoadBundle(path);
+        using var bundle = LoadBundle(name);
 
         var field = FindAssetField(bundle, AssetClassID.AudioClip)
-                    ?? throw new ArgumentException("No AudioClip found.", nameof(path));
+                    ?? throw new ArgumentException("No AudioClip found.", nameof(name));
 
         var offset = field["m_Resource"]["m_Offset"].AsLong;
         var size = field["m_Resource"]["m_Size"].AsLong;
@@ -117,33 +115,14 @@ public class AssetProvider(CatalogProvider catalogProvider, IAssetDataProvider d
         return new Music(length, data);
     }
 
-    public Text GetTextRaw(string path)
+    public Text GetTextRaw(string name)
     {
-        using var bundle = LoadBundle(path);
+        using var bundle = LoadBundle(name);
 
         var field = FindAssetField(bundle, AssetClassID.TextAsset)
-                    ?? throw new ArgumentException("No TextAsset found.", nameof(path));
+                    ?? throw new ArgumentException("No TextAsset found.", nameof(name));
 
         return new Text(field["m_Script"].AsString);
-    }
-
-    private Stream GetBundle(string path)
-    {
-        var bundlePath = catalogProvider.Get(path);
-
-        if (bundlePath is string str)
-            return dataProvider.GetBundle(str);
-
-        throw new ArgumentException("Asset not found in catalog.", nameof(path));
-    }
-
-    public List<string> List()
-    {
-        return catalogProvider.GetAll()
-            .Where(v => v.Value is string)
-            .Select(v => v.Key)
-            .OfType<string>()
-            .ToList();
     }
 
     private readonly record struct MappedAssetBundle(

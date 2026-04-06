@@ -110,7 +110,7 @@ public class PhiInfoHttpServer : IDisposable
             var requestUrl = httpContext.Request.Url;
             var query = ParseQueryString(requestUrl?.Query ?? string.Empty);
 
-            var result = _router.Handle(requestUrl?.AbsolutePath ?? "/", query);
+            var result = _router.Handle(requestUrl?.AbsolutePath.TrimEnd('/') ?? "/", query);
 
             responseObj.StatusCode = result.code;
             responseObj.ContentType = result.mime;

@@ -15,13 +15,14 @@ public class PhiInfoContext : IDisposable
         _dataProvider = dataProvider;
         var field = new FieldProvider(dataProvider);
         Info = new InfoProvider(dataProvider, field, language);
-        var catalog = new CatalogProvider(dataProvider);
-        Asset = new AssetProvider(catalog, dataProvider);
+        Catalog = new CatalogProvider(dataProvider);
+        Asset = new AssetProvider(dataProvider);
         _initialized = true;
     }
 
     public AssetProvider Asset { get; }
     public InfoProvider Info { get; }
+    public CatalogProvider Catalog { get; }
 
     public Language Language
     {

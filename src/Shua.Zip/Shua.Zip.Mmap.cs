@@ -10,8 +10,6 @@ public sealed class MmapReadAt : IReadAt
 
     public MmapReadAt(string filePath)
     {
-        if (filePath == null) throw new ArgumentNullException(nameof(filePath));
-
         var fileInfo = new FileInfo(filePath);
         Size = fileInfo.Length;
 

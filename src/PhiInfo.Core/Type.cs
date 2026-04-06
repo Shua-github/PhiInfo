@@ -92,6 +92,14 @@ public record ChapterInfo(
     List<string> song_ids
 );
 
+public record AllInfo(
+    uint version,
+    List<SongInfo> songs,
+    List<Folder> collection,
+    List<Avatar> avatars,
+    List<string> tips,
+    List<ChapterInfo> chapters);
+
 [AttributeUsage(AttributeTargets.Field)]
 public class LanguageStringIdAttribute(string id) : Attribute
 {

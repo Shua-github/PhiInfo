@@ -172,4 +172,9 @@ public class InfoProvider : IDisposable
             })
             .ToList();
     }
+
+    public AllInfo ExtractAllInfo()
+    {
+        return new AllInfo(GetPhiVersion(),ExtractSongInfo(),ExtractCollection(),ExtractAvatars(),ExtractTips(),ExtractChapters());
+    }
 }
