@@ -11,26 +11,36 @@ namespace PhiInfo.Core;
 
 public class FieldProvider : IDisposable
 {
-    private readonly ClassDatabaseFile _classDatabase;
+    private readonly Lazy<ClassDatabaseFile> _classDatabase;
+    private readonly Lazy<AssetsFile> _globalGameManagers;
+    private readonly Lazy<Cpp2IlTempGenerator> _templateGenerator;
 
-    private readonly AssetsFile _globalGameManagers = new();
-
-    private readonly Cpp2IlTempGenerator _templateGenerator;
     private bool _disposed;
 
     public FieldProvider(IFieldDataProvider dataProvider)
     {
-        _globalGameManagers.Read(new AssetsFileReader(dataProvider.GetGlobalGameManagers()));
+        _globalGameManagers = new Lazy<AssetsFile>(() =>
+        {
+            var file = new AssetsFile();
+            file.Read(new AssetsFileReader(dataProvider.GetGlobalGameManagers()));
+            return file;
+        });
 
-        ClassPackageFile classPackage = new();
-        using AssetsFileReader cldbReader = new(dataProvider.GetCldb());
-        classPackage.Read(cldbReader);
+        _classDatabase = new Lazy<ClassDatabaseFile>(() =>
+        {
+            ClassPackageFile classPackage = new();
+            using AssetsFileReader cldbReader = new(dataProvider.GetCldb());
+            classPackage.Read(cldbReader);
+            return classPackage.GetClassDatabase(_globalGameManagers.Value.Metadata.UnityVersion);
+        });
 
-        _classDatabase = classPackage.GetClassDatabase(_globalGameManagers.Metadata.UnityVersion);
-
-        _templateGenerator = new Cpp2IlTempGenerator(dataProvider.GetGlobalMetadata(), dataProvider.GetIl2CppBinary());
-        _templateGenerator.SetUnityVersion(new UnityVersion(_globalGameManagers.Metadata.UnityVersion));
-        _templateGenerator.InitializeCpp2IL();
+        _templateGenerator = new Lazy<Cpp2IlTempGenerator>(() =>
+        {
+            var generator = new Cpp2IlTempGenerator(dataProvider.GetGlobalMetadata(), dataProvider.GetIl2CppBinary());
+            generator.SetUnityVersion(new UnityVersion(_globalGameManagers.Value.Metadata.UnityVersion));
+            generator.InitializeCpp2IL();
+            return generator;
+        });
     }
 
     public void Dispose()
@@ -46,8 +56,9 @@ public class FieldProvider : IDisposable
 
         if (disposing)
         {
-            _globalGameManagers.Close();
-            _templateGenerator.Dispose();
+            if (_globalGameManagers.IsValueCreated) _globalGameManagers.Value.Close();
+
+            if (_templateGenerator.IsValueCreated) _templateGenerator.Value.Dispose();
         }
     }
 
@@ -97,22 +108,20 @@ public class FieldProvider : IDisposable
         // 2. 回退到 ClassDatabase
         if (baseField == null)
         {
-            var cldbType = _classDatabase.FindAssetClassByID(info.TypeId);
+            var cldbType = _classDatabase.Value.FindAssetClassByID(info.TypeId);
             if (cldbType == null)
                 return null;
 
             baseField = new AssetTypeTemplateField();
-            baseField.FromClassDatabase(_classDatabase, cldbType);
+            baseField.FromClassDatabase(_classDatabase.Value, cldbType);
         }
 
         // 3. MonoBehaviour: 使用 MonoTempGenerator 补充字段
         if (info.TypeId == (int)AssetClassID.MonoBehaviour && monoFields && reader != null)
         {
-            // 保存原始位置
             var originalPosition = reader.Position;
             reader.Position = absByteStart;
 
-            // 创建临时的 RefTypeManager 用于读取值
             RefTypeManager tempRefMan = new();
             tempRefMan.FromTypeTree(file.Metadata);
 
@@ -122,12 +131,11 @@ public class FieldProvider : IDisposable
             if (scriptPtr.IsNull())
                 goto OutAndReset;
 
-            // 确定 MonoScript 所在的文件
             AssetsFile monoScriptFile;
             if (scriptPtr.FileId == 0)
                 monoScriptFile = file;
             else if (scriptPtr.FileId == 1)
-                monoScriptFile = _globalGameManagers;
+                monoScriptFile = _globalGameManagers.Value;
             else
                 throw new InvalidDataException("Unsupported MonoScript FileID");
 
@@ -140,11 +148,10 @@ public class FieldProvider : IDisposable
                     out var className))
                 goto OutAndReset;
 
-            // 移除 .dll 扩展名
             if (assemblyName!.EndsWith(".dll"))
                 assemblyName = assemblyName.Substring(0, assemblyName.Length - 4);
 
-            var newBase = _templateGenerator.GetTemplateField(
+            var newBase = _templateGenerator.Value.GetTemplateField(
                 baseField,
                 assemblyName,
                 nameSpace,
@@ -155,17 +162,16 @@ public class FieldProvider : IDisposable
                 baseField = newBase;
 
             OutAndReset:
-            // 恢复原始位置
             reader.Position = originalPosition;
         }
 
         return baseField;
     }
 
-    public static PhiVersion GetPhiVersion()
+    public PhiVersion GetPhiVersion()
     {
-        var meta = LibCpp2IlMain.TheMetadata
-                   ?? throw new InvalidOperationException("Cpp2Il is not initialized.");
+        _ = _templateGenerator.Value;
+        var meta = LibCpp2IlMain.TheMetadata!;
 
         var assembly = meta.AssemblyDefinitions
                            .FirstOrDefault(a => a.AssemblyName.Name == "Assembly-CSharp")
@@ -248,11 +254,11 @@ public class FieldProvider : IDisposable
             if (msId == 0)
                 continue;
 
-            var monoInfo = _globalGameManagers.GetAssetInfo(msId);
+            var monoInfo = _globalGameManagers.Value.GetAssetInfo(msId);
             if (monoInfo == null)
                 continue;
 
-            var msBase = GetBaseField(_globalGameManagers, monoInfo, false);
+            var msBase = GetBaseField(_globalGameManagers.Value, monoInfo, false);
             var msName = msBase["m_Name"]?.AsString;
 
             if (msName == name)

@@ -9,8 +9,8 @@ namespace PhiInfo.Core;
 public class InfoProvider : IDisposable
 {
     private readonly FieldProvider _fieldProvider;
-    private readonly AssetsFile _level0 = new();
-    private readonly AssetsFile _level22 = new();
+    private readonly Lazy<AssetsFile> _level0;
+    private readonly Lazy<AssetsFile> _level22;
     private bool _disposed;
 
     public InfoProvider(IInfoDataProvider dataProvider, FieldProvider fieldProvider,
@@ -18,8 +18,19 @@ public class InfoProvider : IDisposable
     {
         Language = language;
         _fieldProvider = fieldProvider;
-        _level0.Read(new AssetsFileReader(dataProvider.GetLevel0()));
-        _level22.Read(new AssetsFileReader(dataProvider.GetLevel22()));
+        _level0 = new Lazy<AssetsFile>(() =>
+        {
+            var file = new AssetsFile();
+            file.Read(new AssetsFileReader(dataProvider.GetLevel0()));
+            return file;
+        });
+
+        _level22 = new Lazy<AssetsFile>(() =>
+        {
+            var file = new AssetsFile();
+            file.Read(new AssetsFileReader(dataProvider.GetLevel22()));
+            return file;
+        });
     }
 
     public Language Language { get; set; }
@@ -37,20 +48,22 @@ public class InfoProvider : IDisposable
 
         if (disposing)
         {
-            _level0.Close();
-            _level22.Close();
-            _fieldProvider.Dispose();
+            if (_level0.IsValueCreated)
+                _level0.Value.Close();
+
+            if (_level22.IsValueCreated)
+                _level22.Value.Close();
         }
     }
 
     public PhiVersion GetPhiVersion()
     {
-        return FieldProvider.GetPhiVersion();
+        return _fieldProvider.GetPhiVersion();
     }
 
     public List<SongInfo> ExtractSongInfo()
     {
-        var gameInfo = _fieldProvider.FindMonoBehaviour(_level0, "GameInformation")
+        var gameInfo = _fieldProvider.FindMonoBehaviour(_level0.Value, "GameInformation")
                        ?? throw new InvalidOperationException("GameInformation MonoBehaviour not found");
 
         var songs = gameInfo["song"]
@@ -96,7 +109,7 @@ public class InfoProvider : IDisposable
 
     public List<Folder> ExtractCollection()
     {
-        var control = _fieldProvider.FindMonoBehaviour(_level22, "SaturnOSControl")
+        var control = _fieldProvider.FindMonoBehaviour(_level22.Value, "SaturnOSControl")
                       ?? throw new InvalidOperationException("SaturnOSControl MonoBehaviour not found");
 
         return control["folders"]["Array"].Children
@@ -127,7 +140,7 @@ public class InfoProvider : IDisposable
 
     public List<Avatar> ExtractAvatars()
     {
-        var control = _fieldProvider.FindMonoBehaviour(_level0, "GetCollectionControl")
+        var control = _fieldProvider.FindMonoBehaviour(_level0.Value, "GetCollectionControl")
                       ?? throw new InvalidOperationException("GetCollectionControl MonoBehaviour not found");
 
         return control["avatars"]["Array"].Children
@@ -140,7 +153,7 @@ public class InfoProvider : IDisposable
 
     public List<string> ExtractTips()
     {
-        var provider = _fieldProvider.FindMonoBehaviour(_level0, "TipsProvider")
+        var provider = _fieldProvider.FindMonoBehaviour(_level0.Value, "TipsProvider")
                        ?? throw new InvalidOperationException("TipsProvider MonoBehaviour not found");
 
         return provider["tips"]["Array"].Children
@@ -152,7 +165,7 @@ public class InfoProvider : IDisposable
 
     public List<ChapterInfo> ExtractChapters()
     {
-        var gameInfo = _fieldProvider.FindMonoBehaviour(_level0, "GameInformation")
+        var gameInfo = _fieldProvider.FindMonoBehaviour(_level0.Value, "GameInformation")
                        ?? throw new InvalidOperationException("GameInformation MonoBehaviour not found");
 
         return gameInfo["chapters"]["Array"].Children

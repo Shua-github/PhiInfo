@@ -5,24 +5,27 @@ namespace PhiInfo.Core;
 
 public class PhiInfoContext : IDisposable
 {
+    private readonly Lazy<CatalogProvider> _catalog;
     private readonly IDataProvider _dataProvider;
+
+    private readonly FieldProvider _fieldProvider;
     private readonly bool _initialized;
     private bool _disposed;
 
     public PhiInfoContext(IDataProvider dataProvider, Language language = Language.Chinese)
     {
-        Language = language;
         _dataProvider = dataProvider;
-        var field = new FieldProvider(dataProvider);
-        Info = new InfoProvider(dataProvider, field, language);
-        Catalog = new CatalogProvider(dataProvider);
+        Language = language;
+        _fieldProvider = new FieldProvider(dataProvider);
+        Info = new InfoProvider(dataProvider, _fieldProvider, language);
+        _catalog = new Lazy<CatalogProvider>(() => new CatalogProvider(dataProvider));
         Bundle = new BundleProvider(dataProvider);
         _initialized = true;
     }
 
     public BundleProvider Bundle { get; }
     public InfoProvider Info { get; }
-    public CatalogProvider Catalog { get; }
+    public CatalogProvider Catalog => _catalog.Value;
 
     public Language Language
     {
@@ -48,6 +51,7 @@ public class PhiInfoContext : IDisposable
         if (disposing)
         {
             Info.Dispose();
+            _fieldProvider.Dispose();
             _dataProvider.Dispose();
         }
     }
