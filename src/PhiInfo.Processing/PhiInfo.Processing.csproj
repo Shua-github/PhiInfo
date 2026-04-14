@@ -27,5 +27,6 @@
         <Authors>PhigrosLabs</Authors>
         <Description>The processing library of PhiInfo.Core</Description>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/PhigrosLabs/PhiInfo</RepositoryUrl>
     </PropertyGroup>
 </Project>

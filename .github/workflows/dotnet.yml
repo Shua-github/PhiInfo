@@ -1,7 +1,8 @@
 name: dotnet-ci
 
 permissions:
-  contents: read 
+  contents: read
+  packages: write
 
 on:
   push:
@@ -40,6 +41,15 @@ jobs:
       run: | 
         curl -L -o tpk.zip https://nightly.link/AssetRipper/Tpk/workflows/type_tree_tpk/master/uncompressed_file.zip
         unzip tpk.zip uncompressed.tpk
+    
+    - name: Add GitHub NuGet source
+      run: |
+        dotnet nuget add source
+        --username ${{ github.actor }}
+        --password ${{ secrets.GITHUB_TOKEN }}
+        --store-password-in-clear-text
+        --name github
+        "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
 
     - name: Restore PhiInfo
       run: | 
@@ -62,6 +72,15 @@ jobs:
       with:
         name: Nuget
         path: ./nuget/*
+
+    - name: Push NuGet Packages
+      run: |
+        for pkg in ./nuget/*.nupkg; do
+          dotnet nuget push "$pkg"
+            --api-key ${{ secrets.GITHUB_TOKEN }}
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+            --skip-duplicate
+        done
             
     - name: Build PhiInfo.CLI
       run: | 

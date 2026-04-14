@@ -13,5 +13,6 @@
         <Authors>Shua</Authors>
         <Description>Shua's Zip Decompression Library</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/PhigrosLabs/PhiInfo</RepositoryUrl>
     </PropertyGroup>
 </Project>

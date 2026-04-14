@@ -18,6 +18,7 @@
         <Authors>PhigrosLabs</Authors>
         <Description>Phigros Info Analysis Library</Description>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/PhigrosLabs/PhiInfo</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
