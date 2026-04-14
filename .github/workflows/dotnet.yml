@@ -69,7 +69,8 @@ jobs:
         path: ./nuget/*
 
     - name: Push NuGet Packages
-      run: for pkg in ./nuget/*.nupkg; do dotnet nuget push "$pkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --skip-duplicate; done
+      if: github.event_name == 'push'
+      run: for pkg in ./nuget/*.nupkg; do dotnet nuget push "$pkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "github" --skip-duplicate; done
             
     - name: Build PhiInfo.CLI
       run: | 
