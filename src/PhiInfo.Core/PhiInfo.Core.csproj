@@ -17,6 +17,7 @@
         <PackageId>PhigrosLabs.PhiInfo.Core</PackageId>
         <Authors>PhigrosLabs</Authors>
         <Description>Phigros Info Analysis Library</Description>
+        <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     </PropertyGroup>
 
     <ItemGroup>

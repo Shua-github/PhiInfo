@@ -12,5 +12,6 @@
         <Version>1.0</Version>
         <Authors>Shua</Authors>
         <Description>Shua's Zip Decompression Library</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
     </PropertyGroup>
 </Project>

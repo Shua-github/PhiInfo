@@ -26,5 +26,6 @@
         <PackageId>PhigrosLabs.PhiInfo.Processing</PackageId>
         <Authors>PhigrosLabs</Authors>
         <Description>The processing library of PhiInfo.Core</Description>
+        <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     </PropertyGroup>
 </Project>
