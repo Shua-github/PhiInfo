@@ -26,7 +26,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.2.0</Version>
+        <Version>2.2.1</Version>
         <GitHash>dev</GitHash>
         <InformationalVersion>$(Version)+$(GitHash)</InformationalVersion>
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

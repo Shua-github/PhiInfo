@@ -2,6 +2,7 @@
 using System.CommandLine;
 using System.IO;
 using System.Linq;
+using LibCpp2IL.Logging;
 using PhiInfo.Core;
 using PhiInfo.Core.Type;
 using PhiInfo.Processing.DataProvider;
@@ -9,6 +10,14 @@ using Shua.Zip;
 using Shua.Zip.ReadAt;
 
 namespace PhiInfo.CLI;
+
+public class QuietLogWriter : LogWriter
+{
+    public override void Error(string message) { }
+    public override void Info(string message) { }
+    public override void Verbose(string message) { }
+    public override void Warn(string message) { }
+}
 
 internal class Program
 {
@@ -93,6 +102,7 @@ internal class Program
 
     private static int Main(string[] args)
     {
+        LibLogger.Writer = new QuietLogWriter();
         return RootCommand.Parse(args).Invoke();
     }
 }

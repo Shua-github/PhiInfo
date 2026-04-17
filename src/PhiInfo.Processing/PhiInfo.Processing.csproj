@@ -19,7 +19,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>3.2.2</Version>
+        <Version>3.2.3</Version>
         <GitHash>dev</GitHash>
         <InformationalVersion>$(Version)+$(GitHash)</InformationalVersion>
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

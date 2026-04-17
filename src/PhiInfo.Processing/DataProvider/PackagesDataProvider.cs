@@ -50,7 +50,7 @@ public class AndroidPackagesDataProvider(IEnumerable<ShuaZip> zips, Stream cldbS
 
         foreach (var zip in zips)
         {
-            var entries = zip.FileEntries
+            var entries = zip.Eocd.FileEntries
                 .Where(e => e.Name.StartsWith("assets/bin/Data/level22.split", StringComparison.Ordinal));
 
             foreach (var entry in entries)

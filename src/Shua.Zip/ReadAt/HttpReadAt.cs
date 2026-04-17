@@ -56,7 +56,7 @@ public sealed class HttpReadAt : IReadAt
             .GetAwaiter()
             .GetResult();
 
-        return new HttpReadAtStream(resp, stream);
+        return new HttpReadAtStream(resp, stream, length);
     }
 
     public void Dispose()
@@ -64,23 +64,36 @@ public sealed class HttpReadAt : IReadAt
         _client.Dispose();
     }
 
-    private sealed class HttpReadAtStream(HttpResponseMessage response, Stream stream) : Stream
+    private sealed class HttpReadAtStream : Stream
     {
+        private readonly Stream _innerStream;
+        private readonly HttpResponseMessage _response;
+        private long _position;
+
+        public HttpReadAtStream(HttpResponseMessage response, Stream stream, int length)
+        {
+            _response = response;
+            _innerStream = stream;
+            Length = length;
+            _position = 0;
+        }
+
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-
-        public override long Length => throw new NotSupportedException();
+        public override long Length { get; }
 
         public override long Position
         {
-            get => throw new NotSupportedException();
+            get => _position;
             set => throw new NotSupportedException();
         }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            return stream.Read(buffer, offset, count);
+            var read = _innerStream.Read(buffer, offset, count);
+            _position += read;
+            return read;
         }
 
         public override void Flush()
@@ -106,8 +119,8 @@ public sealed class HttpReadAt : IReadAt
         {
             if (disposing)
             {
-                stream.Dispose();
-                response.Dispose();
+                _innerStream.Dispose();
+                _response.Dispose();
             }
 
             base.Dispose(disposing);

@@ -10,19 +10,21 @@ public delegate Stream DecompressionHandler(IReadAt reader, long dataOffset, int
 public sealed class ShuaZip : IDisposable
 {
     private readonly Dictionary<ushort, DecompressionHandler> _decompressionHandlers;
+    private readonly Dictionary<string, FileEntry> _entryIndex = new();
     private readonly IReadAt _reader;
-    private readonly long _size;
     private bool _disposed;
 
     public ShuaZip(IReadAt reader)
     {
         _reader = reader;
-        _size = reader.Size;
         _decompressionHandlers = CreateDefaultHandlers();
-        FileEntries = LoadCentralDirectory();
+        Eocd = new EndOfCentralDirectory(reader);
+        foreach (var entry in Eocd.FileEntries) _entryIndex[entry.Name] = entry;
     }
 
-    public List<FileEntry> FileEntries { get; }
+    public EndOfCentralDirectory Eocd { get; }
+
+    public List<FileEntry> FileEntries => Eocd.FileEntries;
 
     public void Dispose()
     {
@@ -36,113 +38,14 @@ public sealed class ShuaZip : IDisposable
         _decompressionHandlers[method] = handler;
     }
 
-    private List<FileEntry> LoadCentralDirectory()
-    {
-        var eocd = FindEocd();
-
-        if (eocd.CentralDirectorySize > int.MaxValue)
-            throw new InvalidOperationException("Central directory too large");
-
-        var cdData = ReadAt((long)eocd.CentralDirectoryOffset, (int)eocd.CentralDirectorySize);
-
-        return ParseCentralDirectory(cdData);
-    }
-
-    private List<FileEntry> ParseCentralDirectory(byte[] cdData)
-    {
-        var entries = new List<FileEntry>();
-        var position = 0;
-
-        while (position + 4 <= cdData.Length)
-        {
-            if (!FileEntry.TryReadFromCentralDirectory(cdData, ref position, out var entry)) break;
-
-            if (entry != null) entries.Add(entry);
-        }
-
-        return entries;
-    }
-
-    private EndOfCentralDirectory FindEocd()
-    {
-        var searchStart = Math.Max(0, _size - (65535 + 22));
-        var searchEnd = _size;
-
-        for (var offset = searchEnd - 1; offset >= searchStart; offset--)
-        {
-            if (searchEnd - offset < 22) continue;
-
-            var data = ReadAt(offset, 22);
-
-            if (data.Length >= 4
-                && data[0] == 0x50
-                && data[1] == 0x4B
-                && data[2] == 0x05
-                && data[3] == 0x06)
-            {
-                var commentLen = data[20] | (data[21] << 8);
-                if (offset + 22 + commentLen == _size) return EndOfCentralDirectory.FromEocd(_reader, offset, data);
-            }
-        }
-
-        throw new InvalidOperationException("End of Central Directory not found");
-    }
-
-    public byte[] ReadFile(FileEntry entry)
-    {
-        using var stream = OpenFileStream(entry);
-        var capacity = 0;
-        if (entry.CompressionMethod.IsStored)
-            capacity = (int)entry.CompressedSize;
-        else if (entry.CompressionMethod.IsDeflate) capacity = (int)entry.UncompressedSize;
-
-        using var output = new MemoryStream(capacity);
-        stream.CopyTo(output);
-        return output.ToArray();
-    }
-
-    public Stream OpenFileStream(FileEntry entry)
-    {
-        if (entry.LocalHeaderOffset > long.MaxValue)
-            throw new InvalidOperationException("Local header offset too large");
-
-        var headerData = ReadAt((long)entry.LocalHeaderOffset, 30);
-
-        if (headerData.Length < 30
-            || headerData[0] != 0x50
-            || headerData[1] != 0x4B
-            || headerData[2] != 0x03
-            || headerData[3] != 0x04)
-            throw new InvalidOperationException("Invalid local file header signature");
-
-        var filenameLen = headerData[26] | (headerData[27] << 8);
-        var extraLen = headerData[28] | (headerData[29] << 8);
-
-        var dataOffset = (long)entry.LocalHeaderOffset + 30L + filenameLen + extraLen;
-
-        if (entry.CompressedSize > int.MaxValue) throw new InvalidOperationException("Compressed size too large");
-
-        var compressionMethod = entry.CompressionMethod.Value;
-
-        if (!_decompressionHandlers.TryGetValue(compressionMethod, out var handler))
-            throw new InvalidOperationException($"Unsupported compression method: {compressionMethod}");
-
-        if (entry.UncompressedSize > int.MaxValue)
-            throw new InvalidOperationException("Uncompressed size too large");
-
-        return handler(_reader, dataOffset, (int)entry.CompressedSize, (int)entry.UncompressedSize);
-    }
-
     private static Dictionary<ushort, DecompressionHandler> CreateDefaultHandlers()
     {
         return new Dictionary<ushort, DecompressionHandler>
         {
-            // 0: 存储（无压缩）
             {
                 0, (reader, offset, compressedSize, uncompressedSize) =>
                     reader.OpenRead(offset, compressedSize)
             },
-            // 8: Deflate压缩
             {
                 8,
                 (reader, offset, compressedSize, uncompressedSize) =>
@@ -154,48 +57,59 @@ public sealed class ShuaZip : IDisposable
         };
     }
 
-    private byte[] ReadAt(long offset, int length)
+    public byte[] ReadFile(FileEntry entry, bool strictMode = true)
     {
-        if (length == 0) return [];
+        using var stream = OpenFileStream(entry, strictMode);
+        int capacity;
+        if (entry.CompressionMethod == 0)
+            capacity = (int)entry.CompressedSize;
+        else
+            capacity = (int)entry.UncompressedSize;
 
-        using var stream = _reader.OpenRead(offset, length);
-        var buffer = new byte[length];
-        var readTotal = 0;
-
-        while (readTotal < length)
-        {
-            var read = stream.Read(buffer, readTotal, length - readTotal);
-            if (read <= 0) throw new EndOfStreamException("Unexpected end of stream");
-
-            readTotal += read;
-        }
-
+        var buffer = new byte[capacity];
+        stream.ReadExactly(buffer, 0, buffer.Length);
         return buffer;
     }
 
-    public byte[] ReadFileByName(string fileName)
+    public Stream OpenFileStream(FileEntry entry, bool strictMode = true)
     {
-        if (string.IsNullOrEmpty(fileName))
-            throw new ArgumentNullException(nameof(fileName));
+        if (strictMode)
+            entry.FromLocalFileHeader(_reader);
 
-        var entry = FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase)) ??
-                    throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
+        if (entry.CompressedSize > int.MaxValue) throw new InvalidOperationException("Compressed size too large");
 
-        return ReadFile(entry);
+        var compressionMethod = entry.CompressionMethod;
+
+        if (!_decompressionHandlers.TryGetValue(compressionMethod, out var handler))
+            throw new InvalidOperationException($"Unsupported compression method: {compressionMethod}");
+
+        if (entry.UncompressedSize > int.MaxValue)
+            throw new InvalidOperationException("Uncompressed size too large");
+
+        return handler(_reader, (long)entry.DataOffset, (int)entry.CompressedSize, (int)entry.UncompressedSize);
     }
 
-    public Stream OpenFileStreamByName(string fileName)
+    public byte[] ReadFileByName(string fileName, bool strictMode = true)
     {
         var entry = TryFindEntry(fileName) ??
                     throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
 
-        return OpenFileStream(entry);
+        return ReadFile(entry, strictMode);
+    }
+
+    public Stream OpenFileStreamByName(string fileName, bool strictMode = true)
+    {
+        var entry = TryFindEntry(fileName) ??
+                    throw new FileNotFoundException($"File '{fileName}' not found in the archive.");
+
+        return OpenFileStream(entry, strictMode);
     }
 
     public FileEntry? TryFindEntry(string fileName)
     {
         if (string.IsNullOrEmpty(fileName))
             throw new ArgumentNullException(nameof(fileName));
-        return FileEntries.Find(f => string.Equals(f.Name, fileName, StringComparison.OrdinalIgnoreCase));
+
+        return _entryIndex.TryGetValue(fileName, out var entry) ? entry : null;
     }
 }

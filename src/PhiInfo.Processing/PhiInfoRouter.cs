@@ -175,13 +175,13 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
                     {
                         case "bmp":
                             image.SaveAsBmp(ms);
-                            return new Response(200, "image/bmp", ms.ToArray());
+                            return new Response(200, "image/bmp", ms.GetBuffer());
 
                         case "jpeg":
                         case "jpg":
                         default:
                             image.SaveAsJpeg(ms);
-                            return new Response(200, "image/jpeg", ms.ToArray());
+                            return new Response(200, "image/jpeg", ms.GetBuffer());
                     }
                 }
 

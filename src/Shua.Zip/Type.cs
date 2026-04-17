@@ -1,10 +1,10 @@
 using System;
+using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-#pragma warning disable IDE0130
 namespace Shua.Zip;
-#pragma warning restore IDE0130
 
 public interface IReadAt : IDisposable
 {
@@ -12,314 +12,238 @@ public interface IReadAt : IDisposable
     Stream OpenRead(long offset, int length);
 }
 
-public readonly struct CompressionMethod(ushort value)
-{
-    public ushort Value { get; } = value;
-
-    public bool IsStored => Value == 0;
-    public bool IsDeflate => Value == 8;
-
-    public static CompressionMethod FromUInt16(ushort value)
-    {
-        return new CompressionMethod(value);
-    }
-}
-
 public sealed class FileEntry
 {
-    private FileEntry(
-        string name,
-        CompressionMethod compressionMethod,
-        ulong compressedSize,
-        ulong uncompressedSize,
-        uint crc32,
-        ulong localHeaderOffset)
+    private ushort _extraLen;
+    private ushort _nameLen;
+    public ulong CompressedSize;
+    public ushort CompressionMethod;
+    public uint Crc32;
+    public ulong LocalHeaderOffset;
+    public string Name;
+    public ulong UncompressedSize;
+
+    public FileEntry(BinaryReader reader)
     {
-        Name = name;
-        CompressionMethod = compressionMethod;
-        CompressedSize = compressedSize;
-        UncompressedSize = uncompressedSize;
-        Crc32 = crc32;
-        LocalHeaderOffset = localHeaderOffset;
+        if (reader.ReadUInt32() != 0x02014B50)
+            throw new InvalidOperationException("Invalid central directory signature");
+
+        _ = reader.ReadUInt16(); // version made by
+
+        ParseGeneral(reader);
+        var commentLen = reader.ReadUInt16();
+
+        _ = reader.ReadUInt16(); // disk number start
+        _ = reader.ReadUInt16(); // internal attrs
+        _ = reader.ReadUInt32(); // external attrs
+
+        LocalHeaderOffset = reader.ReadUInt32();
+
+        var nameBytes = reader.ReadBytes(_nameLen);
+
+        Name = Encoding.UTF8.GetString(nameBytes);
+
+        ParseExtra(reader);
+
+        _ = reader.ReadBytes(commentLen);
     }
 
-    public string Name { get; }
-    public CompressionMethod CompressionMethod { get; }
-    public ulong CompressedSize { get; }
-    public ulong UncompressedSize { get; }
-    public uint Crc32 { get; }
-    public ulong LocalHeaderOffset { get; }
+    public ulong DataOffset => LocalHeaderOffset + 30 + _nameLen + _extraLen;
 
-    public static bool TryReadFromCentralDirectory(byte[] data, ref int position, out FileEntry? entry)
+    public void FromLocalFileHeader(IReadAt readAt)
     {
-        entry = null;
-        if (position + 4 > data.Length) return false;
+        if (LocalHeaderOffset > long.MaxValue)
+            throw new InvalidOperationException("Local header offset too large");
 
-        var signature = Binary.ReadUint32Le(data, ref position);
-        if (signature != 0x02014B50)
-        {
-            position -= 4;
-            return false;
-        }
+        using var stream = readAt.OpenRead((long)LocalHeaderOffset, 30);
+        using var headerReader = new BinaryReader(stream, Encoding.UTF8, false);
 
-        var entryStart = position - 4;
-        _ = Binary.ReadUint16Le(data, ref position); // version made by
-        _ = Binary.ReadUint16Le(data, ref position); // version needed
-        _ = Binary.ReadUint16Le(data, ref position); // flags
+        if (headerReader.ReadUInt32() != 0x04034B50)
+            throw new InvalidOperationException("Invalid local file header signature");
 
-        var compressionMethod = CompressionMethod.FromUInt16(Binary.ReadUint16Le(data, ref position));
-
-        _ = Binary.ReadUint16Le(data, ref position); // mod time
-        _ = Binary.ReadUint16Le(data, ref position); // mod date
-
-        var crc32 = Binary.ReadUint32Le(data, ref position);
-        var compressedSize32 = Binary.ReadUint32Le(data, ref position);
-        var uncompressedSize32 = Binary.ReadUint32Le(data, ref position);
-
-        var filenameLen = Binary.ReadUint16Le(data, ref position);
-        var extraLen = Binary.ReadUint16Le(data, ref position);
-        var commentLen = Binary.ReadUint16Le(data, ref position);
-
-        _ = Binary.ReadUint16Le(data, ref position); // disk number start
-        _ = Binary.ReadUint16Le(data, ref position); // internal attrs
-        _ = Binary.ReadUint32Le(data, ref position); // external attrs
-
-        var localHeaderOffset32 = Binary.ReadUint32Le(data, ref position);
-
-        if (position + filenameLen > data.Length) return false;
-
-        var name = Encoding.UTF8.GetString(data, position, filenameLen);
-        position += filenameLen;
-
-        var extraStart = position;
-        var extraEnd = position + extraLen;
-        var extraOffset = 0;
-        var extraLength = 0;
-        if (extraStart >= 0 && extraEnd <= data.Length && extraLen > 0)
-        {
-            extraOffset = extraStart;
-            extraLength = extraLen;
-        }
-
-        var (compressedSize, uncompressedSize, localHeaderOffset) = ParseZip64Extra(
-            data,
-            extraOffset,
-            extraLength,
-            compressedSize32,
-            uncompressedSize32,
-            localHeaderOffset32);
-
-        position = entryStart + 46 + filenameLen + extraLen + commentLen;
-        if (position > data.Length) return false;
-
-        entry = new FileEntry(
-            name,
-            compressionMethod,
-            compressedSize,
-            uncompressedSize,
-            crc32,
-            localHeaderOffset);
-        return true;
+        ParseGeneral(headerReader);
+        using var reader = new BinaryReader(readAt.OpenRead((long)LocalHeaderOffset + 30, _nameLen + _extraLen));
+        Name = Encoding.UTF8.GetString(reader.ReadBytes(_nameLen));
+        ParseExtra(reader);
     }
 
-    private static (ulong compressedSize, ulong uncompressedSize, ulong localHeaderOffset) ParseZip64Extra(
-        byte[] data,
-        int offset,
-        int length,
-        uint compressedSize32,
-        uint uncompressedSize32,
-        uint localHeaderOffset32)
+    private void ParseGeneral(BinaryReader reader)
     {
-        ulong compressedSize = compressedSize32;
-        ulong uncompressedSize = uncompressedSize32;
-        ulong localHeaderOffset = localHeaderOffset32;
+        _ = reader.ReadUInt16(); // version needed
+        _ = reader.ReadUInt16(); // flags
+        CompressionMethod = reader.ReadUInt16();
 
-        if (length <= 0) return (compressedSize, uncompressedSize, localHeaderOffset);
+        _ = reader.ReadUInt16(); // mod time
+        _ = reader.ReadUInt16(); // mod date
 
-        var position = offset;
-        var end = offset + length;
-        while (position + 4 <= end)
+        Crc32 = reader.ReadUInt32();
+        CompressedSize = reader.ReadUInt32();
+        UncompressedSize = reader.ReadUInt32();
+
+        _nameLen = reader.ReadUInt16();
+        _extraLen = reader.ReadUInt16();
+    }
+
+    private void ParseExtra(BinaryReader reader)
+    {
+        int remaining = _extraLen;
+
+        while (remaining >= 4)
         {
-            var headerId = Binary.ReadUint16Le(data, ref position);
-            var dataSize = Binary.ReadUint16Le(data, ref position);
+            var headerId = reader.ReadUInt16();
+            var dataSize = reader.ReadUInt16();
+            remaining -= 4;
 
-            if (headerId == 0x0001)
+            if (dataSize > remaining)
+                throw new InvalidOperationException("Corrupt ZIP extra field");
+
+            if (headerId == 0x0001) // ZIP64
             {
-                var dataStart = position;
-                if (compressedSize32 == 0xFFFFFFFF && position + 8 <= end)
-                    compressedSize = Binary.ReadUint64Le(data, ref position);
-
-                if (uncompressedSize32 == 0xFFFFFFFF && position + 8 <= end)
-                    uncompressedSize = Binary.ReadUint64Le(data, ref position);
-
-                if (localHeaderOffset32 == 0xFFFFFFFF && position + 8 <= end)
-                    localHeaderOffset = Binary.ReadUint64Le(data, ref position);
-
-                position = Math.Min(dataStart + dataSize, end);
+                UncompressedSize = reader.ReadUInt64();
+                CompressedSize = reader.ReadUInt64();
+                LocalHeaderOffset = reader.ReadUInt64();
+                _ = reader.ReadUInt32(); // Number of the disk on which this file starts 
             }
             else
             {
-                position += dataSize;
+                reader.ReadBytes(dataSize);
             }
 
-            if (dataSize == 0) break;
+            remaining -= dataSize;
         }
-
-        return (compressedSize, uncompressedSize, localHeaderOffset);
     }
 }
 
 public sealed class EndOfCentralDirectory
 {
-    private EndOfCentralDirectory(
-        ulong centralDirectorySize,
-        ulong centralDirectoryOffset,
-        ushort commentLength,
-        bool usesZip64)
+    private readonly IReadAt _reader;
+    private ulong _centralDirectoryOffset;
+    private ulong _centralDirectorySize;
+    public bool Zip64;
+
+    public EndOfCentralDirectory(IReadAt reader)
     {
-        CentralDirectorySize = centralDirectorySize;
-        CentralDirectoryOffset = centralDirectoryOffset;
-        CommentLength = commentLength;
-        UsesZip64 = usesZip64;
+        _reader = reader;
+        ParseEocd();
+        FileEntries = LoadCentralDirectory();
     }
 
-    public ulong CentralDirectorySize { get; }
-    public ulong CentralDirectoryOffset { get; }
-    public ushort CommentLength { get; }
-    public bool UsesZip64 { get; }
+    public List<FileEntry> FileEntries { get; private set; }
 
-    public static EndOfCentralDirectory FromEocd(
-        IReadAt reader,
-        long eocdOffset,
-        byte[] data)
+    private (byte[] Buffer, int Index) FindEocd()
     {
-        if (reader == null) throw new ArgumentNullException(nameof(reader));
+        var size = _reader.Size;
+        var searchStart = Math.Max(0, size - (65535 + 22 + 20));
+        var searchLength = (int)(size - searchStart);
 
-        if (data.Length < 22) throw new InvalidOperationException("EOCD data too short");
+        using var stream = _reader.OpenRead(searchStart, searchLength);
+        var buffer = new byte[searchLength];
+        stream.ReadExactly(buffer, 0, searchLength);
 
-        var position = 0;
-        var signature = Binary.ReadUint32Le(data, ref position);
-        if (signature != 0x06054B50) throw new InvalidOperationException("Invalid EOCD signature");
-
-        _ = Binary.ReadUint16Le(data, ref position); // disk number
-        _ = Binary.ReadUint16Le(data, ref position); // cd start disk
-        var diskEntries = Binary.ReadUint16Le(data, ref position);
-        var totalEntries = Binary.ReadUint16Le(data, ref position);
-
-        var cdSize32 = Binary.ReadUint32Le(data, ref position);
-        var cdOffset32 = Binary.ReadUint32Le(data, ref position);
-        var commentLen = Binary.ReadUint16Le(data, ref position);
-
-        var usesZip64 =
-            cdSize32 == 0xFFFFFFFF
-            || cdOffset32 == 0xFFFFFFFF
-            || diskEntries == 0xFFFF
-            || totalEntries == 0xFFFF;
-
-        if (!usesZip64) return new EndOfCentralDirectory(cdSize32, cdOffset32, commentLen, false);
-
-        var locatorOffset = eocdOffset - 20;
-        if (locatorOffset < 0) throw new InvalidOperationException("Zip64 locator not found");
-
-        using var locatorStream = reader.OpenRead(locatorOffset, 20);
-        var locator = new byte[20];
-        var readTotal = 0;
-        while (readTotal < locator.Length)
+        for (var i = searchLength - 22; i >= 0; i--)
         {
-            var read = locatorStream.Read(locator, readTotal, locator.Length - readTotal);
-            if (read <= 0) throw new EndOfStreamException("Unexpected end of stream");
+            if (buffer[i] != 0x50 || buffer[i + 1] != 0x4B ||
+                buffer[i + 2] != 0x05 || buffer[i + 3] != 0x06)
+                continue;
 
-            readTotal += read;
+            var commentLen = (ushort)(buffer[i + 20] | (buffer[i + 21] << 8));
+            if (i + 22 + commentLen != searchLength) continue;
+
+            return (buffer, i);
         }
 
-        if (locator[0] != 0x50
-            || locator[1] != 0x4B
-            || locator[2] != 0x06
-            || locator[3] != 0x07)
+        throw new InvalidOperationException("End of Central Directory not found");
+    }
+
+    private void ParseEocd()
+    {
+        var (searchBuffer, eocdIndex) = FindEocd();
+        var eocd = searchBuffer.AsSpan(eocdIndex, 22);
+
+        var signature = BinaryPrimitives.ReadUInt32LittleEndian(eocd);
+        if (signature != 0x06054B50)
+            throw new InvalidOperationException("Invalid EOCD signature");
+
+        var diskEntries = BinaryPrimitives.ReadUInt16LittleEndian(eocd.Slice(8, 2));
+        var totalEntries = BinaryPrimitives.ReadUInt16LittleEndian(eocd.Slice(10, 2));
+        _centralDirectorySize = BinaryPrimitives.ReadUInt32LittleEndian(eocd.Slice(12, 4));
+        _centralDirectoryOffset = BinaryPrimitives.ReadUInt32LittleEndian(eocd.Slice(16, 4));
+
+        Zip64 = _centralDirectorySize == 0xFFFFFFFF || _centralDirectoryOffset == 0xFFFFFFFF || diskEntries == 0xFFFF ||
+                totalEntries == 0xFFFF;
+
+        if (!Zip64) return;
+
+        var locatorIndex = eocdIndex - 20;
+        if (locatorIndex < 0) throw new InvalidOperationException("Zip64 locator is outside of buffered range");
+
+        var locatorSpan = searchBuffer.AsSpan(locatorIndex, 20);
+
+        if (BinaryPrimitives.ReadUInt32LittleEndian(locatorSpan) != 0x07064B50)
             throw new InvalidOperationException("Zip64 locator not found");
 
-        var pos = 4;
-        _ = Binary.ReadUint32Le(locator, ref pos); // disk number with zip64 eocd
-        var zip64EocdOffset = Binary.ReadUint64Le(locator, ref pos);
-        _ = Binary.ReadUint32Le(locator, ref pos); // total disks
+        var zip64EocdOffset = BinaryPrimitives.ReadUInt64LittleEndian(locatorSpan.Slice(8, 8));
 
-        if (zip64EocdOffset > long.MaxValue) throw new InvalidOperationException("Zip64 EOCD offset too large");
+        if (zip64EocdOffset > long.MaxValue)
+            throw new InvalidOperationException("Zip64 EOCD offset too large");
 
-        using var zip64Stream = reader.OpenRead((long)zip64EocdOffset, 56);
-        var zip64Header = new byte[56];
-        readTotal = 0;
-        while (readTotal < zip64Header.Length)
-        {
-            var read = zip64Stream.Read(zip64Header, readTotal, zip64Header.Length - readTotal);
-            if (read <= 0) throw new EndOfStreamException("Unexpected end of stream");
+        using var zip64Stream = _reader.OpenRead((long)zip64EocdOffset, 56);
+        using var zip64Reader = new BinaryReader(zip64Stream, Encoding.UTF8, false);
 
-            readTotal += read;
-        }
-
-        return FromZip64Bytes(zip64Header);
+        ParseZip64(zip64Reader);
     }
 
-    public static EndOfCentralDirectory FromZip64Bytes(byte[] data)
+    private void ParseZip64(BinaryReader reader)
     {
-        if (data.Length < 56) throw new InvalidOperationException("Zip64 EOCD data too short");
+        // Zip64 EOCD signature (fixed marker 0x06064B50)
+        var signature = reader.ReadUInt32();
+        if (signature != 0x06064B50)
+            throw new InvalidOperationException("Invalid Zip64 EOCD signature");
 
-        var position = 0;
-        var signature = Binary.ReadUint32Le(data, ref position);
-        if (signature != 0x06064B50) throw new InvalidOperationException("Invalid Zip64 EOCD signature");
+        // size of zip64 end of central directory record (8 bytes)
+        _ = reader.ReadUInt64();
 
-        _ = Binary.ReadUint64Le(data, ref position); // size of record
-        _ = Binary.ReadUint16Le(data, ref position); // version made by
-        _ = Binary.ReadUint16Le(data, ref position); // version needed
-        _ = Binary.ReadUint32Le(data, ref position); // disk number
-        _ = Binary.ReadUint32Le(data, ref position); // cd start disk
-        _ = Binary.ReadUint64Le(data, ref position); // total entries on disk
-        _ = Binary.ReadUint64Le(data, ref position); // total entries
+        // version made by (2 bytes)
+        _ = reader.ReadUInt16();
 
-        var cdSize = Binary.ReadUint64Le(data, ref position);
-        var cdOffset = Binary.ReadUint64Le(data, ref position);
+        // version needed to extract (2 bytes)
+        _ = reader.ReadUInt16();
 
-        return new EndOfCentralDirectory(cdSize, cdOffset, 0, true);
-    }
-}
+        // number of this disk (4 bytes)
+        _ = reader.ReadUInt32();
 
-internal static class Binary
-{
-    public static ushort ReadUint16Le(byte[] data, ref int offset)
-    {
-        if (offset + 2 > data.Length) throw new InvalidOperationException("Unexpected end of data");
+        // number of the disk with the start of the central directory (4 bytes)
+        _ = reader.ReadUInt32();
 
-        var value = (ushort)(data[offset] | (data[offset + 1] << 8));
-        offset += 2;
-        return value;
-    }
+        // total number of entries in the central directory on this disk (8 bytes)
+        _ = reader.ReadUInt64();
 
-    public static uint ReadUint32Le(byte[] data, ref int offset)
-    {
-        if (offset + 4 > data.Length) throw new InvalidOperationException("Unexpected end of data");
+        // total number of entries in the central directory (8 bytes)
+        _ = reader.ReadUInt64();
 
-        var value =
-            (uint)(data[offset]
-                   | (data[offset + 1] << 8)
-                   | (data[offset + 2] << 16)
-                   | (data[offset + 3] << 24));
-        offset += 4;
-        return value;
+        // size of the central directory (8 bytes)
+        _centralDirectorySize = reader.ReadUInt64();
+
+        // offset of start of central directory (8 bytes)
+        _centralDirectoryOffset = reader.ReadUInt64();
     }
 
-    public static ulong ReadUint64Le(byte[] data, ref int offset)
+    private List<FileEntry> LoadCentralDirectory()
     {
-        if (offset + 8 > data.Length) throw new InvalidOperationException("Unexpected end of data");
+        if (_centralDirectorySize > int.MaxValue)
+            throw new InvalidOperationException("Central directory too large");
 
-        var value =
-            data[offset]
-            | ((ulong)data[offset + 1] << 8)
-            | ((ulong)data[offset + 2] << 16)
-            | ((ulong)data[offset + 3] << 24)
-            | ((ulong)data[offset + 4] << 32)
-            | ((ulong)data[offset + 5] << 40)
-            | ((ulong)data[offset + 6] << 48)
-            | ((ulong)data[offset + 7] << 56);
-        offset += 8;
-        return value;
+        if (_centralDirectoryOffset > long.MaxValue)
+            throw new InvalidOperationException("Central directory offset too large");
+
+        using var cdStream = _reader.OpenRead((long)_centralDirectoryOffset, (int)_centralDirectorySize);
+        using var binaryReader = new BinaryReader(cdStream, Encoding.UTF8, false);
+
+        var endPosition = cdStream.Position + cdStream.Length;
+        var entries = new List<FileEntry>();
+
+        while (binaryReader.BaseStream.Position + 4 <= endPosition) entries.Add(new FileEntry(binaryReader));
+
+        return entries;
     }
 }
