@@ -1,23 +1,15 @@
 ﻿using System;
 using System.CommandLine;
+using System.CommandLine.Completions;
 using System.IO;
 using System.Linq;
-using LibCpp2IL.Logging;
 using PhiInfo.Core;
-using PhiInfo.Core.Type;
 using PhiInfo.Processing.DataProvider;
 using Shua.Zip;
 using Shua.Zip.ReadAt;
+using SixLabors.ImageSharp;
 
 namespace PhiInfo.CLI;
-
-public class QuietLogWriter : LogWriter
-{
-    public override void Error(string message) { }
-    public override void Info(string message) { }
-    public override void Verbose(string message) { }
-    public override void Warn(string message) { }
-}
 
 internal class Program
 {
@@ -64,16 +56,39 @@ internal class Program
         }
     };
 
-    private static readonly Option<Language> LangOption = new("--language")
+    internal static readonly Option<string> ImageFormatOption = new("--image-format")
     {
-        Aliases = { "-l", "--lang" },
-        Description = "Default language",
-        DefaultValueFactory = _ => Language.Chinese
+        Aliases = { "-if" },
+        Description = "Image Format",
+        DefaultValueFactory = _ => "JPEG",
+        CompletionSources =
+        {
+            _ =>
+            {
+                return Configuration.Default.ImageFormatsManager.ImageFormats
+                    .Select(v => new CompletionItem(v.Name));
+            }
+        },
+        CustomParser = result =>
+        {
+            var manager = Configuration.Default.ImageFormatsManager;
+
+            var value = result.Tokens.Single().Value;
+
+            var format = manager.FindByName(value);
+            if (format == null)
+            {
+                result.AddError($"Unknown format: {value}");
+                return null;
+            }
+
+            return format.Name;
+        }
     };
 
     private static readonly RootCommand RootCommand = new("PhiInfo CLI")
     {
-        Options = { PackagesOption, ClassDataOption, LangOption },
+        Options = { PackagesOption, ClassDataOption, ImageFormatOption },
         Subcommands =
         {
             HttpServer.Command,
@@ -96,13 +111,11 @@ internal class Program
     {
         var zips = parseResult.GetValue(PackagesOption)!;
         var classData = parseResult.GetValue(ClassDataOption)!;
-        var lang = parseResult.GetValue(LangOption);
-        return new PhiInfoContext(new AndroidPackagesDataProvider(zips, classData.OpenRead()), lang);
+        return new PhiInfoContext(new AndroidPackagesDataProvider(zips, classData.OpenRead()));
     }
 
     private static int Main(string[] args)
     {
-        LibLogger.Writer = new QuietLogWriter();
         return RootCommand.Parse(args).Invoke();
     }
 }

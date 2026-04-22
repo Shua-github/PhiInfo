@@ -4,6 +4,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -159,6 +160,11 @@ public sealed class CatalogProvider
     public Key? Get(string key)
     {
         return _stringIndex.TryGetValue(key, out var value) ? value : null;
+    }
+
+    public string[] GetStringKeys()
+    {
+        return _stringIndex.Keys.ToArray();
     }
 
     private readonly struct RawEntry

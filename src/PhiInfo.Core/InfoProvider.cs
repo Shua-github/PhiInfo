@@ -13,10 +13,8 @@ public class InfoProvider : IDisposable
     private readonly Lazy<AssetsFile> _level22;
     private bool _disposed;
 
-    public InfoProvider(IInfoDataProvider dataProvider, FieldProvider fieldProvider,
-        Language language = Language.Chinese)
+    public InfoProvider(IInfoDataProvider dataProvider, FieldProvider fieldProvider)
     {
-        Language = language;
         _fieldProvider = fieldProvider;
         _level0 = new Lazy<AssetsFile>(() =>
         {
@@ -32,8 +30,6 @@ public class InfoProvider : IDisposable
             return file;
         });
     }
-
-    public Language Language { get; set; }
 
     public void Dispose()
     {
@@ -61,7 +57,29 @@ public class InfoProvider : IDisposable
         return _fieldProvider.GetPhiVersion();
     }
 
-    public List<SongInfo> ExtractSongInfo()
+    private static Dictionary<Language, string> ExtractMultiLang(AssetTypeValueField field,
+        Func<string, string>? hook = null)
+    {
+        var result = new Dictionary<Language, string>();
+
+        foreach (var child in field.Children)
+        {
+            if (child.FieldName == "code")
+                continue;
+
+            var lang = Extensions.FromString(child.FieldName);
+            var value = child.AsString;
+
+            if (hook != null)
+                value = hook(value);
+
+            result[lang] = value;
+        }
+
+        return result;
+    }
+
+    public List<SongInfo> ExtractSongs()
     {
         var gameInfo = _fieldProvider.FindMonoBehaviour(_level0.Value, "GameInformation")
                        ?? throw new InvalidOperationException("GameInformation MonoBehaviour not found");
@@ -119,18 +137,18 @@ public class InfoProvider : IDisposable
                     .Select(file => new FileItem(
                         file["key"].AsString,
                         file["subIndex"].AsInt,
-                        file["name"][Language.GetStringId()].AsString,
+                        ExtractMultiLang(file["name"]),
                         file["date"].AsString,
-                        file["supervisor"][Language.GetStringId()].AsString,
+                        ExtractMultiLang(file["supervisor"]),
                         file["category"].AsString,
-                        file["content"][Language.GetStringId()].AsString.Replace("\\n", "\n"),
-                        file["properties"][Language.GetStringId()].AsString
+                        ExtractMultiLang(file["content"], v => v.Replace("\\n", "\n")),
+                        ExtractMultiLang(file["properties"])
                     ))
                     .ToList();
 
                 return new Folder(
-                    folder["title"][Language.GetStringId()].AsString,
-                    folder["subTitle"][Language.GetStringId()].AsString,
+                    ExtractMultiLang(folder["title"]),
+                    ExtractMultiLang(folder["subTitle"]),
                     folder["cover"].AsString,
                     files
                 );
@@ -151,16 +169,28 @@ public class InfoProvider : IDisposable
             .ToList();
     }
 
-    public List<string> ExtractTips()
+    public Dictionary<Language, List<string>> ExtractTips()
     {
         var provider = _fieldProvider.FindMonoBehaviour(_level0.Value, "TipsProvider")
                        ?? throw new InvalidOperationException("TipsProvider MonoBehaviour not found");
 
-        return provider["tips"]["Array"].Children
-                   .FirstOrDefault(t => t["language"].AsInt == (int)Language)?["tips"]["Array"].Children
-                   .Select(t => t.AsString)
-                   .ToList()
-               ?? [];
+        var result = new Dictionary<Language, List<string>>();
+
+        var array = provider["tips"]["Array"].Children;
+
+        foreach (var entry in array)
+        {
+            var langValue = entry["language"].AsInt;
+            var language = Extensions.FromInt(langValue);
+
+            var tips = entry["tips"]["Array"].Children
+                .Select(t => t.AsString)
+                .ToList();
+
+            result[language] = tips;
+        }
+
+        return result;
     }
 
     public List<ChapterInfo> ExtractChapters()
@@ -188,7 +218,7 @@ public class InfoProvider : IDisposable
 
     public AllInfo ExtractAllInfo()
     {
-        return new AllInfo(GetPhiVersion(), ExtractSongInfo(), ExtractCollection(), ExtractAvatars(), ExtractTips(),
+        return new AllInfo(GetPhiVersion(), ExtractSongs(), ExtractCollection(), ExtractAvatars(), ExtractTips(),
             ExtractChapters());
     }
 }

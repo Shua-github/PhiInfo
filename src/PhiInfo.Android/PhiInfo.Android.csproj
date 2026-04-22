@@ -26,8 +26,8 @@
         <ApplicationTitle>PhiInfo.Android</ApplicationTitle>
         <ApplicationId>dev.phigros_labs.PhiInfo</ApplicationId>
         <GitHash>dev</GitHash>
-        <ApplicationVersion>1</ApplicationVersion>
-        <ApplicationDisplayVersion>1.0.0+$(GitHash)</ApplicationDisplayVersion>
+        <ApplicationVersion>2</ApplicationVersion>
+        <ApplicationDisplayVersion>2.0.0+$(GitHash)</ApplicationDisplayVersion>
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     </PropertyGroup>

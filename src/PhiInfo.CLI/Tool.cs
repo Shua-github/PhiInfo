@@ -1,6 +1,5 @@
 using System;
 using System.CommandLine;
-using System.CommandLine.Completions;
 using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -22,38 +21,8 @@ internal static class Tool
         WriteIndented = true
     });
 
-    private static readonly Option<string> ImageFormatOption = new("--image-format")
-    {
-        Aliases = { "-if" },
-        Description = "Image Format",
-        DefaultValueFactory = _ => "JPEG",
-        CompletionSources =
-        {
-            _ =>
-            {
-                return Configuration.Default.ImageFormatsManager.ImageFormats
-                    .Select(v => new CompletionItem(v.Name));
-            }
-        },
-        CustomParser = result =>
-        {
-            var manager = Configuration.Default.ImageFormatsManager;
-
-            var value = result.Tokens.Single().Value;
-
-            var format = manager.FindByName(value);
-            if (format == null)
-            {
-                result.AddError($"Unknown format: {value}");
-                return null;
-            }
-
-            return format.Name;
-        }
-    };
-
     private static readonly Command InfoSongsCommand = CreateInfoCommand("songs", context =>
-        JsonSerializer.SerializeToUtf8Bytes(context.Info.ExtractSongInfo(), JsonContext.ListSongInfo));
+        JsonSerializer.SerializeToUtf8Bytes(context.Info.ExtractSongs(), JsonContext.ListSongInfo));
 
     private static readonly Command InfoCollectionCommand = CreateInfoCommand("collection", context =>
         JsonSerializer.SerializeToUtf8Bytes(context.Info.ExtractCollection(), JsonContext.ListFolder));
@@ -94,7 +63,7 @@ internal static class Tool
 
     private static readonly Command AssetTextCommand = new("text", "Print text asset bytes to stdout")
     {
-        Arguments = { BundleNameArgument  },
+        Arguments = { BundleNameArgument },
         Action = new CommandLineAction(HandleAssetTextCommand)
     };
 
@@ -107,7 +76,6 @@ internal static class Tool
     private static readonly Command AssetImageCommand = new("image", "Print image asset bytes to stdout")
     {
         Arguments = { BundleNameArgument },
-        Options = { ImageFormatOption },
         Action = new CommandLineAction(HandleAssetImageCommand)
     };
 
@@ -212,7 +180,7 @@ internal static class Tool
         {
             var context = Program.GetContext(parseResult);
             var name = parseResult.GetValue(BundleNameArgument)!;
-            var formatName = parseResult.GetValue(ImageFormatOption)!;
+            var formatName = parseResult.GetValue(Program.ImageFormatOption)!;
             var manager = Configuration.Default.ImageFormatsManager;
             var format = manager.FindByName(formatName)!;
 
@@ -233,5 +201,4 @@ internal static class Tool
         using var stdout = Console.OpenStandardOutput();
         stdout.Write(bytes, 0, bytes.Length);
     }
-
 }

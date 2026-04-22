@@ -15,11 +15,6 @@ namespace PhiInfo.Core;
 
 public static class Extensions
 {
-    private static readonly Dictionary<Language, LanguageStringIdAttribute> LangAttributeMap = typeof(Language)
-        .GetFields(BindingFlags.Static | BindingFlags.Public)
-        .ToDictionary(x => (Language)x.GetValue(null)!,
-            x => x.GetCustomAttribute<LanguageStringIdAttribute>() ?? throw new ArgumentNullException());
-
     internal static AssetTypeValueField GetBaseField(this AssetsFile file, AssetFileInfo info)
     {
         lock (file.Reader)
@@ -41,11 +36,38 @@ public static class Extensions
         }
     }
 
-    public static string GetStringId(this Language lang)
+    private static readonly Dictionary<string, Language> LangFromStringMap =
+        typeof(Language)
+            .GetFields(BindingFlags.Static | BindingFlags.Public)
+            .ToDictionary(
+                x => x.GetCustomAttribute<LanguageStringIdAttribute>()?.Id
+                     ?? throw new ArgumentNullException(),
+                x => (Language)x.GetValue(null)!
+            );
+
+    private static readonly Dictionary<int, Language> LangFromIntMap =
+        typeof(Language)
+            .GetFields(BindingFlags.Static | BindingFlags.Public)
+            .ToDictionary(
+                x => Convert.ToInt32((Language)x.GetValue(null)!),
+                x => (Language)x.GetValue(null)!
+            );
+
+    internal static Language FromString(string id)
     {
-        return LangAttributeMap[lang].Id;
+        if (LangFromStringMap.TryGetValue(id, out var lang))
+            return lang;
+
+        throw new ArgumentException($"Unknown language string id: {id}");
     }
 
+    internal static Language FromInt(int value)
+    {
+        if (LangFromIntMap.TryGetValue(value, out var lang))
+            return lang;
+
+        throw new ArgumentException($"Unknown language value: {value}");
+    }
 #if !NET7_0_OR_GREATER
     public static void ReadExactly(this Stream stream, byte[] buffer, int offset, int count)
     {

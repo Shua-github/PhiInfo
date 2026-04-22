@@ -15,6 +15,8 @@ using PhiInfo.Core.Asset;
 using PhiInfo.Core.Type;
 using PhiInfo.Processing.Type;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Jpeg;
 
 namespace PhiInfo.Processing;
 
@@ -25,109 +27,120 @@ namespace PhiInfo.Processing;
 [JsonSerializable(typeof(List<ChapterInfo>))]
 [JsonSerializable(typeof(PhiVersion))]
 [JsonSerializable(typeof(ServerInfo))]
+[JsonSerializable(typeof(AppInfo))]
+[JsonSerializable(typeof(ApiInfo))]
 [JsonSerializable(typeof(AllInfo))]
-[JsonSerializable(typeof(Language))]
-[JsonSerializable(typeof(List<Language>))]
+[JsonSerializable(typeof(Dictionary<Language, List<string>>))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 public partial class JsonContext : JsonSerializerContext
 {
 }
 
-public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
+public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiType, IImageFormat? imageFormat = null)
 {
+    private const string ApiVersion = "1.0";
+
     private static readonly Response MissParam = new(
         400,
         "text/plain",
         "Missing parameter"u8.ToArray()
     );
 
-    private readonly JsonContext _jsonContext = new(new JsonSerializerOptions
+    private static readonly ImageFormatManager Manager = Configuration.Default.ImageFormatsManager;
+
+    private static readonly JsonContext JsonContext = new(new JsonSerializerOptions
     {
         Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
     });
 
-    public Response Handle(string path, Dictionary<string, string> query)
+    private readonly Suffix _suffix = new((imageFormat ?? JpegFormat.Instance).FileExtensions.First(), "txt", "ogg");
+
+    public Response Handle(string path)
     {
-        if (path == "/asset")
-        {
-            var dict = context.Catalog.GetAll()
-                .Where(v => v.Key.IsString && v.Value != null && v.Value.Value.IsString)
-                .ToDictionary(
-                    v => v.Key.Str!,
-                    v => v.Value!.Value.Str
-                );
-
-            var json = SerializeJson(dict, _jsonContext.DictionaryStringString);
-            return new Response(200, "application/json", json);
-        }
-
         if (path.StartsWith("/asset/"))
         {
-            var segments = path["/asset/".Length..]
-                .Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (path.Equals("/asset/metadata.json"))
+            {
+                var assets = SerializeJson(context.Catalog.GetStringKeys(), JsonContext.StringArray);
+                return new Response(200, "application/json", assets);
+            }
 
-            if (segments.Length <= 1)
+            var keyWithSuffix = path["/asset/".Length..];
+            if (string.IsNullOrEmpty(keyWithSuffix))
                 return MissParam;
 
-            var type = segments[^1];
-            var assetPath = string.Join('/', segments.Take(segments.Length - 1));
+            var dotIndex = keyWithSuffix.LastIndexOf('.');
+            if (dotIndex <= 0 || dotIndex == keyWithSuffix.Length - 1)
+                return MissParam;
 
-            return HandleAsset(assetPath, type, query);
+            var keyStr = keyWithSuffix[..dotIndex];
+            var suffix = keyWithSuffix[(dotIndex + 1)..];
+
+            var type = suffix switch
+            {
+                var s when s.Equals(_suffix.text) => "text",
+                var s when s.Equals(_suffix.music) => "music",
+                var s when s.Equals(_suffix.image) => "image",
+                _ => null
+            };
+
+            if (type is null)
+                return new Response(400, "text/plain", "Invalid asset suffix"u8.ToArray());
+
+            var name = context.Catalog.Get(keyStr);
+            if (name?.IsString ?? false)
+                return HandleAsset(name.Value.Str!, type);
+
+            return new Response(404, "text/plain", "Key not found"u8.ToArray());
         }
 
         switch (path)
         {
-            case "/info/songs":
-                var songs = SerializeJson(context.Info.ExtractSongInfo(), _jsonContext.ListSongInfo);
+            case "/info/songs.json":
+                var songs = SerializeJson(context.Info.ExtractSongs(), JsonContext.ListSongInfo);
                 return new Response(200, "application/json", songs);
 
-            case "/info/collection":
-                var collection = SerializeJson(context.Info.ExtractCollection(), _jsonContext.ListFolder);
+            case "/info/collection.json":
+                var collection = SerializeJson(context.Info.ExtractCollection(), JsonContext.ListFolder);
                 return new Response(200, "application/json", collection);
 
-            case "/info/avatars":
-                var avatars = SerializeJson(context.Info.ExtractAvatars(), _jsonContext.ListAvatar);
+            case "/info/avatars.json":
+                var avatars = SerializeJson(context.Info.ExtractAvatars(), JsonContext.ListAvatar);
                 return new Response(200, "application/json", avatars);
 
-            case "/info/tips":
-                var tips = SerializeJson(context.Info.ExtractTips(), _jsonContext.ListString);
+            case "/info/tips.json":
+                var tips = SerializeJson(context.Info.ExtractTips(), JsonContext.DictionaryLanguageListString);
                 return new Response(200, "application/json", tips);
 
-            case "/info/chapters":
-                var chapters = SerializeJson(context.Info.ExtractChapters(), _jsonContext.ListChapterInfo);
+            case "/info/chapters.json":
+                var chapters = SerializeJson(context.Info.ExtractChapters(), JsonContext.ListChapterInfo);
                 return new Response(200, "application/json", chapters);
 
-            case "/info/all":
-                var allData = SerializeJson(context.Info.ExtractAllInfo(), _jsonContext.AllInfo);
+#if DEBUG
+            case "/info/all.json":
+                var allData = SerializeJson(context.Info.ExtractAllInfo(), JsonContext.AllInfo);
                 return new Response(200, "application/json", allData);
+#endif
 
-            case "/info/version":
-                var version = SerializeJson(context.Info.GetPhiVersion(), _jsonContext.PhiVersion);
+            case "/info/version.json":
+                var version = SerializeJson(context.Info.GetPhiVersion(), JsonContext.PhiVersion);
                 return new Response(200, "application/json", version);
 
-            case "/info/server":
+            case "/api_info.json":
+                var apiInfo =
+                    SerializeJson(new ApiInfo(ApiVersion, apiType, _suffix),
+                        JsonContext.ApiInfo);
+                return new Response(200, "application/json", apiInfo);
+
+            case "/_server":
                 var serverInfo = GetServerInfo();
-                var serverData = SerializeJson(serverInfo, _jsonContext.ServerInfo);
+                var serverData = SerializeJson(serverInfo, JsonContext.ServerInfo);
                 return new Response(200, "application/json", serverData);
 
-            case "/lang/state":
-                var currentLang = context.Language.ToString();
-                return new Response(200, "text/plain", Encoding.UTF8.GetBytes(currentLang));
-
-            case "/lang/set":
-                if (!query.TryGetValue("lang", out var langStr) || string.IsNullOrEmpty(langStr))
-                    return MissParam;
-
-                if (!Enum.TryParse<Language>(langStr, true, out var lang))
-                    return new Response(400, "text/plain", "Invalid language"u8.ToArray());
-
-                context.Language = lang;
-                return new Response(204, null, null);
-
-            case "/lang/list":
-                var languages = Enum.GetValues<Language>().Select(l => l.ToString()).ToList();
-                var langData = SerializeJson(languages, _jsonContext.ListString);
-                return new Response(200, "application/json", langData);
+            case "/_app":
+                var appData = SerializeJson(appInfo, JsonContext.AppInfo);
+                return new Response(200, "application/json", appData);
 
             default:
                 return new Response(404, "text/plain", "Not Found"u8.ToArray());
@@ -148,14 +161,14 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion ?? "Unknown";
 
-        return new ServerInfo(version, rid, appInfo);
+        return new ServerInfo(version, rid);
     }
 
-    private Response HandleAsset(string name, string type, Dictionary<string, string> query)
+    private Response HandleAsset(string name, string type)
     {
         try
         {
-            switch (type.ToLowerInvariant())
+            switch (type)
             {
                 case "text":
                 {
@@ -169,20 +182,11 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo)
 
                 case "image":
                 {
+                    var imageFormatInstance = imageFormat ?? JpegFormat.Instance;
                     using var ms = new MemoryStream();
                     using var image = PhiInfoDecoders.DecoderImage(context.Bundle.Get<UnityImage>(name));
-                    switch (query.GetValueOrDefault("format"))
-                    {
-                        case "bmp":
-                            image.SaveAsBmp(ms);
-                            return new Response(200, "image/bmp", ms.GetBuffer());
-
-                        case "jpeg":
-                        case "jpg":
-                        default:
-                            image.SaveAsJpeg(ms);
-                            return new Response(200, "image/jpeg", ms.GetBuffer());
-                    }
+                    image.Save(ms, Manager.GetEncoder(imageFormatInstance));
+                    return new Response(200, imageFormatInstance.DefaultMimeType, ms.ToArray());
                 }
 
                 default:

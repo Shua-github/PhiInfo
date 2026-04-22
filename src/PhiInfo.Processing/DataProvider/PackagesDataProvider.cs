@@ -80,7 +80,9 @@ public class AndroidPackagesDataProvider(IEnumerable<ShuaZip> zips, Stream cldbS
 
     public Stream GetCatalog()
     {
-        var (zip, entry) = FindEntryInAllZips("assets/aa/catalog.json");
+        var (zip, entry) = FindEntryInAllZips("assets/aa/catalog.json");DateTime utc = DateTime.SpecifyKind(entry.ModTime, DateTimeKind.Utc);
+        long ts = (long)(utc - DateTime.UnixEpoch).TotalSeconds;
+        Console.WriteLine(ts);
         return EnsureSeekable(zip.OpenFileStream(entry));
     }
 

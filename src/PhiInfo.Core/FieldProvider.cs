@@ -5,9 +5,29 @@ using AssetsTools.NET;
 using AssetsTools.NET.Cpp2IL;
 using AssetsTools.NET.Extra;
 using LibCpp2IL;
+using LibCpp2IL.Logging;
 using PhiInfo.Core.Type;
 
 namespace PhiInfo.Core;
+
+internal class LibLogWriter : LogWriter
+{
+    public override void Error(string message)
+    {
+    }
+
+    public override void Info(string message)
+    {
+    }
+
+    public override void Verbose(string message)
+    {
+    }
+
+    public override void Warn(string message)
+    {
+    }
+}
 
 public class FieldProvider : IDisposable
 {
@@ -19,6 +39,8 @@ public class FieldProvider : IDisposable
 
     public FieldProvider(IFieldDataProvider dataProvider)
     {
+        LibLogger.Writer = new LibLogWriter();
+
         _globalGameManagers = new Lazy<AssetsFile>(() =>
         {
             var file = new AssetsFile();

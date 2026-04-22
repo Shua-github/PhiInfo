@@ -19,6 +19,8 @@ public sealed class FileEntry
     public ulong CompressedSize;
     public ushort CompressionMethod;
     public uint Crc32;
+    public ushort DosModDate;
+    public ushort DosModTime;
     public ulong LocalHeaderOffset;
     public string Name;
     public ulong UncompressedSize;
@@ -48,7 +50,22 @@ public sealed class FileEntry
         _ = reader.ReadBytes(commentLen);
     }
 
+    public DateTime ModTime => ParseDosDateTime(DosModTime, DosModDate);
+
     public ulong DataOffset => LocalHeaderOffset + 30 + _nameLen + _extraLen;
+
+    private static DateTime ParseDosDateTime(ushort time, ushort date)
+    {
+        var second = (time & 0x1F) * 2;
+        var minute = (time >> 5) & 0x3F;
+        var hour = (time >> 11) & 0x1F;
+
+        var day = date & 0x1F;
+        var month = (date >> 5) & 0x0F;
+        var year = ((date >> 9) & 0x7F) + 1980;
+
+        return new DateTime(year, month, day, hour, minute, second, DateTimeKind.Unspecified);
+    }
 
     public void FromLocalFileHeader(IReadAt readAt)
     {
@@ -73,8 +90,8 @@ public sealed class FileEntry
         _ = reader.ReadUInt16(); // flags
         CompressionMethod = reader.ReadUInt16();
 
-        _ = reader.ReadUInt16(); // mod time
-        _ = reader.ReadUInt16(); // mod date
+        DosModTime = reader.ReadUInt16();
+        DosModDate = reader.ReadUInt16();
 
         Crc32 = reader.ReadUInt32();
         CompressedSize = reader.ReadUInt32();
@@ -236,8 +253,8 @@ public sealed class EndOfCentralDirectory
         if (_centralDirectoryOffset > long.MaxValue)
             throw new InvalidOperationException("Central directory offset too large");
 
-        using var cdStream = _reader.OpenRead((long)_centralDirectoryOffset, (int)_centralDirectorySize);
-        using var binaryReader = new BinaryReader(cdStream, Encoding.UTF8, false);
+        var cdStream = _reader.OpenRead((long)_centralDirectoryOffset, (int)_centralDirectorySize);
+        using var binaryReader = new BinaryReader(cdStream);
 
         var endPosition = cdStream.Position + cdStream.Length;
         var entries = new List<FileEntry>();

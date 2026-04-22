@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using PhiInfo.Core;
-using PhiInfo.Core.Type;
-using PhiInfo.Processing.DataProvider;
 using PhiInfo.Processing.Type;
-using Shua.Zip;
+using SixLabors.ImageSharp.Formats;
 
 namespace PhiInfo.Processing;
 
@@ -26,25 +22,16 @@ public class PhiInfoHttpServer : IDisposable
         PhiInfoContext context,
         AppInfo appInfo,
         uint port = 41669,
-        string host = "127.0.0.1")
+        string host = "127.0.0.1",
+        IImageFormat? imageFormat = null)
     {
         _context = context;
-        _router = new PhiInfoRouter(_context, appInfo);
+        _router = new PhiInfoRouter(_context, appInfo, "HTTPServer", imageFormat);
 
         _listener.Prefixes.Add($"http://{host}:{port}/");
         _listener.IgnoreWriteExceptions = true;
         _listener.Start();
         _listenerTask = ListenLoopAsync(_cts.Token);
-    }
-    
-    public PhiInfoHttpServer(
-        IDataProvider dataProvider,
-        AppInfo appInfo,
-        uint port = 41669,
-        string host = "127.0.0.1",
-        Language language = Language.Chinese)
-        : this(new PhiInfoContext(dataProvider, language), appInfo, port, host)
-    {
     }
 
     public bool IsRunning => _listener.IsListening;
@@ -75,14 +62,6 @@ public class PhiInfoHttpServer : IDisposable
     }
 
     public event EventHandler<Exception>? OnRequestError;
-
-    public static PhiInfoHttpServer FromAndroidPackagesPathAndCldb(IEnumerable<ShuaZip> packages, Stream cldbStream,
-        AppInfo appInfo,
-        uint port = 41669, string host = "127.0.0.1", Language language = Language.Chinese)
-    {
-        return new PhiInfoHttpServer(new PhiInfoContext(new AndroidPackagesDataProvider(packages, cldbStream)), appInfo,
-            port, host);
-    }
 
     private async Task ListenLoopAsync(CancellationToken cancellationToken)
     {
@@ -121,9 +100,11 @@ public class PhiInfoHttpServer : IDisposable
             }
 
             var requestUrl = httpContext.Request.Url;
-            var query = ParseQueryString(requestUrl?.Query ?? string.Empty);
 
-            var result = _router.Handle(requestUrl?.AbsolutePath.TrimEnd('/') ?? "/", query);
+            var rawPath = requestUrl?.AbsolutePath ?? "/";
+            var decodedPath = Uri.UnescapeDataString(rawPath);
+
+            var result = _router.Handle(decodedPath.TrimEnd('/'));
 
             responseObj.StatusCode = result.code;
             responseObj.ContentType = result.mime;
@@ -139,6 +120,10 @@ public class PhiInfoHttpServer : IDisposable
         {
             // 忽略客户端断开
         }
+        catch (HttpListenerException ex) when (ex.ErrorCode == 995)
+        {
+            // 客户端断开或服务器关闭导致的写中断，属于正常现象
+        }
         catch (Exception ex)
         {
             OnRequestError?.Invoke(this, ex);
@@ -149,22 +134,6 @@ public class PhiInfoHttpServer : IDisposable
             await responseObj.OutputStream.WriteAsync(errorBytes, cancellationToken)
                 .ConfigureAwait(false);
         }
-    }
-
-    private static Dictionary<string, string> ParseQueryString(string query)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrEmpty(query)) return result;
-        var trimmed = query.TrimStart('?');
-        foreach (var part in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var segment = part.Split('=', 2);
-            var name = Uri.UnescapeDataString(segment[0]);
-            var value = segment.Length > 1 ? Uri.UnescapeDataString(segment[1]) : string.Empty;
-            result[name] = value;
-        }
-
-        return result;
     }
 
     private static void AddCorsHeaders(HttpListenerResponse response)

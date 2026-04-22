@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Serialization;
 
 namespace PhiInfo.Core.Type;
 
@@ -61,9 +62,9 @@ public record SongInfo(
 }
 
 public record Folder(
-    string title,
+    Dictionary<Language, string> title,
     // 空字符串时不需要渲染
-    string sub_title,
+    Dictionary<Language, string> sub_title,
     // 为addressable_key
     string cover,
     List<FileItem> files
@@ -75,17 +76,17 @@ public record FileItem(
     // 云存档用的
     int sub_index,
     // 名称
-    string name,
+    Dictionary<Language, string> name,
     // 收集时间
     string date,
     // 保管单位
-    string supervisor,
+    Dictionary<Language, string> supervisor,
     // 等级
     string category,
     // 内容
-    string content,
+    Dictionary<Language, string> content,
     // 额外信息,单个 "名称=值" 结构,与其他信息并列
-    string properties
+    Dictionary<Language, string> properties
 );
 
 public record Avatar(string name, string addressable_key);
@@ -123,7 +124,7 @@ public record AllInfo(
     List<SongInfo> songs,
     List<Folder> collection,
     List<Avatar> avatars,
-    List<string> tips,
+    Dictionary<Language, List<string>> tips,
     List<ChapterInfo> chapters);
 
 [AttributeUsage(AttributeTargets.Field)]
@@ -132,18 +133,19 @@ public class LanguageStringIdAttribute(string id) : Attribute
     public string Id { get; } = id;
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<Language>))]
 public enum Language
 {
-    [LanguageStringId("chinese")] Chinese = 0x28,
+    [LanguageStringId("chinese")] zh_cn = 0x28,
 
     [LanguageStringId("chineseTraditional")]
-    TraditionalChinese = 0x29,
+    zh_tw = 0x29,
 
-    [LanguageStringId("english")] English = 0x0A,
+    [LanguageStringId("english")] en = 0x0A,
 
-    [LanguageStringId("japanese")] Japanese = 0x16,
+    [LanguageStringId("japanese")] ja = 0x16,
 
-    [LanguageStringId("korean")] Korean = 0x17
+    [LanguageStringId("korean")] ko = 0x17
 }
 
 public interface IDataProvider : IDisposable, IFieldDataProvider, IInfoDataProvider, ICatalogDataProvider,
