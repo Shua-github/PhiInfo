@@ -27,7 +27,7 @@
         <ApplicationId>dev.phigros_labs.PhiInfo</ApplicationId>
         <GitHash>dev</GitHash>
         <ApplicationVersion>2</ApplicationVersion>
-        <ApplicationDisplayVersion>2.0.0+$(GitHash)</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>2.0.1+$(GitHash)</ApplicationDisplayVersion>
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     </PropertyGroup>

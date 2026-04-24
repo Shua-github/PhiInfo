@@ -1,6 +1,5 @@
 using System;
 using System.CommandLine;
-using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -40,7 +39,7 @@ internal static class Tool
         JsonSerializer.SerializeToUtf8Bytes(context.Info.ExtractAllInfo(), JsonContext.AllInfo));
 
     private static readonly Command InfoVersionCommand = CreateInfoCommand("version", context =>
-        JsonSerializer.SerializeToUtf8Bytes(context.Info.GetPhiVersion(), JsonContext.PhiVersion));
+        JsonSerializer.SerializeToUtf8Bytes(context.Field.GetPhiVersion(), JsonContext.PhiVersion));
 
     private static readonly Argument<string> BundleNameArgument = new("name")
     {
@@ -125,11 +124,7 @@ internal static class Tool
         try
         {
             var context = Program.GetContext(parseResult);
-            var dict = context.Catalog.GetAll()
-                .Where(v => v.Key.IsString && v.Value != null && v.Value.Value.IsString)
-                .ToDictionary(v => v.Key.Str!, v => v.Value!.Value.Str!);
-
-            var json = JsonSerializer.SerializeToUtf8Bytes(dict, JsonContext.DictionaryStringString);
+            var json = JsonSerializer.SerializeToUtf8Bytes(context.Asset.Catalog, JsonContext.DictionaryStringString);
             WriteStdout(json);
             return 0;
         }
@@ -146,7 +141,7 @@ internal static class Tool
         {
             var context = Program.GetContext(parseResult);
             var name = parseResult.GetValue(BundleNameArgument)!;
-            using var textData = context.Bundle.Get<UnityText>(name);
+            using var textData = context.Asset.Get<UnityText>(name);
             WriteStdout(Encoding.UTF8.GetBytes(textData.Content));
             return 0;
         }
@@ -163,7 +158,7 @@ internal static class Tool
         {
             var context = Program.GetContext(parseResult);
             var name = parseResult.GetValue(BundleNameArgument)!;
-            var musicData = PhiInfoDecoders.DecoderMusic(context.Bundle.Get<UnityMusic>(name));
+            var musicData = PhiInfoDecoders.DecoderMusic(context.Asset.Get<UnityMusic>(name));
             WriteStdout(musicData);
             return 0;
         }
@@ -184,7 +179,7 @@ internal static class Tool
             var manager = Configuration.Default.ImageFormatsManager;
             var format = manager.FindByName(formatName)!;
 
-            using var image = PhiInfoDecoders.DecoderImage(context.Bundle.Get<UnityImage>(name));
+            using var image = PhiInfoDecoders.DecoderImage(context.Asset.Get<UnityImage>(name));
             using var stdout = Console.OpenStandardOutput();
             image.Save(stdout, manager.GetEncoder(format));
             return 0;

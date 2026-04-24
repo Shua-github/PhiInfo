@@ -4,7 +4,7 @@ using System.Linq;
 using AssetsTools.NET;
 using PhiInfo.Core.Type;
 
-namespace PhiInfo.Core;
+namespace PhiInfo.Core.Info;
 
 public class InfoProvider : IDisposable
 {
@@ -50,11 +50,6 @@ public class InfoProvider : IDisposable
             if (_level22.IsValueCreated)
                 _level22.Value.Close();
         }
-    }
-
-    public PhiVersion GetPhiVersion()
-    {
-        return _fieldProvider.GetPhiVersion();
     }
 
     private static Dictionary<Language, string> ExtractMultiLang(AssetTypeValueField field,
@@ -218,7 +213,7 @@ public class InfoProvider : IDisposable
 
     public AllInfo ExtractAllInfo()
     {
-        return new AllInfo(GetPhiVersion(), ExtractSongs(), ExtractCollection(), ExtractAvatars(), ExtractTips(),
-            ExtractChapters());
+        return new AllInfo(_fieldProvider.GetPhiVersion(), ExtractSongs(), ExtractCollection(), ExtractAvatars(),
+            ExtractTips(), ExtractChapters());
     }
 }

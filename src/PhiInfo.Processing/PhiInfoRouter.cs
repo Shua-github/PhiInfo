@@ -2,16 +2,16 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using System.Text.Unicode;
+using LibCpp2IL;
 using PhiInfo.Core;
 using PhiInfo.Core.Asset;
+using PhiInfo.Core.Info;
 using PhiInfo.Core.Type;
 using PhiInfo.Processing.Type;
 using SixLabors.ImageSharp;
@@ -26,8 +26,6 @@ namespace PhiInfo.Processing;
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(List<ChapterInfo>))]
 [JsonSerializable(typeof(PhiVersion))]
-[JsonSerializable(typeof(ServerInfo))]
-[JsonSerializable(typeof(AppInfo))]
 [JsonSerializable(typeof(ApiInfo))]
 [JsonSerializable(typeof(AllInfo))]
 [JsonSerializable(typeof(Dictionary<Language, List<string>>))]
@@ -37,7 +35,7 @@ public partial class JsonContext : JsonSerializerContext
 {
 }
 
-public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiType, IImageFormat? imageFormat = null)
+public class PhiInfoRouter(PhiInfoContext context, string apiType, IImageFormat? imageFormat = null)
 {
     private const string ApiVersion = "1.0";
 
@@ -56,13 +54,19 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiTy
 
     private readonly Suffix _suffix = new((imageFormat ?? JpegFormat.Instance).FileExtensions.First(), "txt", "ogg");
 
+    [Obsolete("Use PhiInfoRouter(PhiInfoContext context, string apiType, IImageFormat? imageFormat = null)")]
+    public PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiType, IImageFormat? imageFormat = null)
+        : this(context, apiType, imageFormat)
+    {
+    }
+
     public Response Handle(string path)
     {
         if (path.StartsWith("/asset/"))
         {
             if (path.Equals("/asset/metadata.json"))
             {
-                var assets = SerializeJson(context.Catalog.GetStringKeys(), JsonContext.StringArray);
+                var assets = SerializeJson(context.Asset.Catalog.Keys.ToArray(), JsonContext.StringArray);
                 return new Response(200, "application/json", assets);
             }
 
@@ -88,11 +92,11 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiTy
             if (type is null)
                 return new Response(400, "text/plain", "Invalid asset suffix"u8.ToArray());
 
-            var name = context.Catalog.Get(keyStr);
-            if (name?.IsString ?? false)
-                return HandleAsset(name.Value.Str!, type);
+            var name = context.Asset.Catalog.GetOrDefault(keyStr, null);
+            if (name == null)
+                return new Response(404, "text/plain", "Key not found"u8.ToArray());
 
-            return new Response(404, "text/plain", "Key not found"u8.ToArray());
+            return HandleAsset(name, type);
         }
 
         switch (path)
@@ -124,7 +128,7 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiTy
 #endif
 
             case "/info/version.json":
-                var version = SerializeJson(context.Info.GetPhiVersion(), JsonContext.PhiVersion);
+                var version = SerializeJson(context.Field.GetPhiVersion(), JsonContext.PhiVersion);
                 return new Response(200, "application/json", version);
 
             case "/api_info.json":
@@ -132,15 +136,6 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiTy
                     SerializeJson(new ApiInfo(ApiVersion, apiType, _suffix),
                         JsonContext.ApiInfo);
                 return new Response(200, "application/json", apiInfo);
-
-            case "/_server":
-                var serverInfo = GetServerInfo();
-                var serverData = SerializeJson(serverInfo, JsonContext.ServerInfo);
-                return new Response(200, "application/json", serverData);
-
-            case "/_app":
-                var appData = SerializeJson(appInfo, JsonContext.AppInfo);
-                return new Response(200, "application/json", appData);
 
             default:
                 return new Response(404, "text/plain", "Not Found"u8.ToArray());
@@ -152,18 +147,6 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiTy
         return JsonSerializer.SerializeToUtf8Bytes(data, typeInfo);
     }
 
-    private ServerInfo GetServerInfo()
-    {
-        var rid = RuntimeInformation.RuntimeIdentifier;
-
-        var version = typeof(PhiInfoRouter)
-            .Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion ?? "Unknown";
-
-        return new ServerInfo(version, rid);
-    }
-
     private Response HandleAsset(string name, string type)
     {
         try
@@ -172,19 +155,19 @@ public class PhiInfoRouter(PhiInfoContext context, AppInfo appInfo, string apiTy
             {
                 case "text":
                 {
-                    using var textData = context.Bundle.Get<UnityText>(name);
+                    using var textData = context.Asset.Get<UnityText>(name);
                     return new Response(200, "text/plain", Encoding.UTF8.GetBytes(textData.Content));
                 }
 
                 case "music":
-                    var musicData = PhiInfoDecoders.DecoderMusic(context.Bundle.Get<UnityMusic>(name));
+                    var musicData = PhiInfoDecoders.DecoderMusic(context.Asset.Get<UnityMusic>(name));
                     return new Response(200, "audio/ogg", musicData);
 
                 case "image":
                 {
                     var imageFormatInstance = imageFormat ?? JpegFormat.Instance;
                     using var ms = new MemoryStream();
-                    using var image = PhiInfoDecoders.DecoderImage(context.Bundle.Get<UnityImage>(name));
+                    using var image = PhiInfoDecoders.DecoderImage(context.Asset.Get<UnityImage>(name));
                     image.Save(ms, Manager.GetEncoder(imageFormatInstance));
                     return new Response(200, imageFormatInstance.DefaultMimeType, ms.ToArray());
                 }

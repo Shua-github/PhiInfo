@@ -7,7 +7,6 @@ using Android.Util;
 using PhiInfo.Core;
 using PhiInfo.Processing;
 using PhiInfo.Processing.DataProvider;
-using PhiInfo.Processing.Type;
 using Shua.Zip;
 using Shua.Zip.ReadAt;
 
@@ -27,12 +26,6 @@ public class HttpServerService : Service
     {
         base.OnCreate();
         CreateNotificationChannel();
-    }
-
-    private AppInfo GetAppInfo()
-    {
-        if (PackageName is null) throw new Exception("包名为null");
-        return new AppInfo(PackageManager?.GetPackageInfo(PackageName, 0)?.VersionName ?? "Unknown", "Android");
     }
 
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
@@ -65,8 +58,8 @@ public class HttpServerService : Service
             var cldbStream = Assets?.Open("classdata.tpk") ?? throw new Exception("cldb资源找不到");
 
             _server = new PhiInfoHttpServer(
-                new PhiInfoContext(new AndroidPackagesDataProvider([new ShuaZip(new MmapReadAt(apkPath))], cldbStream)),
-                GetAppInfo());
+                new PhiInfoContext(new AndroidPackagesDataProvider([new ShuaZip(new MmapReadAt(apkPath))],
+                    cldbStream)));
 
             Log.Info(Tag, "HTTP Server started successfully.");
         }

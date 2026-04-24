@@ -80,15 +80,14 @@ public class AndroidPackagesDataProvider(IEnumerable<ShuaZip> zips, Stream cldbS
 
     public Stream GetCatalog()
     {
-        var (zip, entry) = FindEntryInAllZips("assets/aa/catalog.json");DateTime utc = DateTime.SpecifyKind(entry.ModTime, DateTimeKind.Utc);
-        long ts = (long)(utc - DateTime.UnixEpoch).TotalSeconds;
-        Console.WriteLine(ts);
+        var (zip, entry) = FindEntryInAllZips("assets/aa/catalog.json");
         return EnsureSeekable(zip.OpenFileStream(entry));
     }
 
     public Stream GetBundle(string name)
     {
-        var (zip, entry) = FindEntryInAllZips("assets/aa/Android/" + name);
+        var (zip, entry) =
+            FindEntryInAllZips(name.Replace("{UnityEngine.AddressableAssets.Addressables.RuntimePath}", "assets/aa"));
         return EnsureSeekable(zip.OpenFileStream(entry));
     }
 
@@ -98,7 +97,7 @@ public class AndroidPackagesDataProvider(IEnumerable<ShuaZip> zips, Stream cldbS
         GC.SuppressFinalize(this);
     }
 
-    internal bool TryFindEntryInAllZips(
+    private bool TryFindEntryInAllZips(
         string fileName,
         [NotNullWhen(true)] out ShuaZip? zip,
         [NotNullWhen(true)] out FileEntry? entry)

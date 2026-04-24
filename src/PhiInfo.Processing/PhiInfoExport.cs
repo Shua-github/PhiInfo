@@ -43,7 +43,7 @@ public class PhiInfoExport(PhiInfoContext context, string apiType, IImageFormat?
         WriteJson("/info/tips.json", context.Info.ExtractTips(), JsonContext.DictionaryLanguageListString,
             outputWriter);
         WriteJson("/info/chapters.json", context.Info.ExtractChapters(), JsonContext.ListChapterInfo, outputWriter);
-        WriteJson("/info/version.json", context.Info.GetPhiVersion(), JsonContext.PhiVersion, outputWriter);
+        WriteJson("/info/version.json", context.Field.GetPhiVersion(), JsonContext.PhiVersion, outputWriter);
     }
 
     private void ExportSystem(IOutputWriter outputWriter)
@@ -57,33 +57,42 @@ public class PhiInfoExport(PhiInfoContext context, string apiType, IImageFormat?
 
     private void ExportAssets(IOutputWriter outputWriter)
     {
-        WriteJson("/asset/metadata.json", context.Catalog.GetStringKeys(), JsonContext.StringArray, outputWriter);
+        var filteredAssets = context.Asset.Catalog
+            .Where(asset =>
+                asset.Key.EndsWith(".json") ||
+                asset.Key.EndsWith(".wav") ||
+                asset.Key.EndsWith(".jpg") ||
+                asset.Key.StartsWith("avatar.")
+            )
+            .ToArray();
 
-        var assets = context.Catalog.GetAll()
-            .Where(v => v.Key.IsString && v.Value != null && v.Value.Value.IsString)
-            .Select(v => new AssetRecord(v.Key.Str!, v.Value!.Value.Str!))
-            .ToList();
+        WriteJson(
+            "/asset/metadata.json",
+            filteredAssets.Select(a => a.Key).ToArray(),
+            JsonContext.StringArray,
+            outputWriter
+        );
 
-        Parallel.ForEach(assets, asset =>
+        Parallel.ForEach(filteredAssets, asset =>
         {
             if (asset.Key.EndsWith(".json"))
-                WriteTextAsset($"/asset/{asset.Key}.{_suffix.text}", asset.BundleName, outputWriter);
+                WriteTextAsset($"/asset/{asset.Key}.{_suffix.text}", asset.Value, outputWriter);
             else if (asset.Key.EndsWith(".wav"))
-                WriteMusicAsset($"/asset/{asset.Key}.{_suffix.music}", asset.BundleName, outputWriter);
+                WriteMusicAsset($"/asset/{asset.Key}.{_suffix.music}", asset.Value, outputWriter);
             else if (asset.Key.EndsWith(".jpg") || asset.Key.StartsWith("avatar."))
-                WriteImageAsset($"/asset/{asset.Key}.{_suffix.image}", asset.BundleName, outputWriter);
+                WriteImageAsset($"/asset/{asset.Key}.{_suffix.image}", asset.Value, outputWriter);
         });
     }
 
     private void WriteTextAsset(string path, string bundleName, IOutputWriter outputWriter)
     {
-        using var textData = context.Bundle.Get<UnityText>(bundleName);
+        using var textData = context.Asset.Get<UnityText>(bundleName);
         WriteBytes(path, "text/plain", Encoding.UTF8.GetBytes(textData.Content), outputWriter);
     }
 
     private void WriteMusicAsset(string path, string bundleName, IOutputWriter outputWriter)
     {
-        var musicData = PhiInfoDecoders.DecoderMusic(context.Bundle.Get<UnityMusic>(bundleName));
+        var musicData = PhiInfoDecoders.DecoderMusic(context.Asset.Get<UnityMusic>(bundleName));
         WriteBytes(path, "audio/ogg", musicData, outputWriter);
     }
 
@@ -91,7 +100,7 @@ public class PhiInfoExport(PhiInfoContext context, string apiType, IImageFormat?
     {
         var imageFormatInstance = imageFormat ?? JpegFormat.Instance;
         using var ms = new MemoryStream();
-        using var image = PhiInfoDecoders.DecoderImage(context.Bundle.Get<UnityImage>(bundleName));
+        using var image = PhiInfoDecoders.DecoderImage(context.Asset.Get<UnityImage>(bundleName));
         image.Save(ms, Manager.GetEncoder(imageFormatInstance));
         WriteBytes(path, imageFormatInstance.DefaultMimeType, ms.ToArray(), outputWriter);
     }
@@ -107,6 +116,4 @@ public class PhiInfoExport(PhiInfoContext context, string apiType, IImageFormat?
         using var output = outputWriter.Create(path.TrimStart('/'), mime);
         output.Write(data, 0, data.Length);
     }
-
-    private record AssetRecord(string Key, string BundleName);
 }

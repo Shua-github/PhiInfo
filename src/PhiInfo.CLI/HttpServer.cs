@@ -1,10 +1,8 @@
 using System;
 using System.CommandLine;
-using System.Reflection;
 using System.Threading;
 using PhiInfo.Core;
 using PhiInfo.Processing;
-using PhiInfo.Processing.Type;
 
 namespace PhiInfo.CLI;
 
@@ -41,20 +39,13 @@ internal static class HttpServer
         return 0;
     }
 
-    private static AppInfo GetAppInfo()
-    {
-        var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion ?? "Unknown";
-        return new AppInfo(version, "CLI");
-    }
-
-    public static void RunServerMode(PhiInfoContext context, uint port, string host)
+    private static void RunServerMode(PhiInfoContext context, uint port, string host)
     {
         using var exitEvent = new ManualResetEventSlim(false);
 
-        using var server = new PhiInfoHttpServer(context, GetAppInfo(), port, host);
+        using var server = new PhiInfoHttpServer(context, port, host);
 
-        server.OnRequestError += (sender, ex) => { Console.WriteLine($"Server error: {ex}"); };
+        server.OnRequestError += (_, ex) => { Console.WriteLine($"Server error: {ex}"); };
 
         // 注册事件
         Console.CancelKeyPress += OnCancelKeyPress;

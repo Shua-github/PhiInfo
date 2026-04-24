@@ -6,9 +6,8 @@ using AssetsTools.NET.Cpp2IL;
 using AssetsTools.NET.Extra;
 using LibCpp2IL;
 using LibCpp2IL.Logging;
-using PhiInfo.Core.Type;
 
-namespace PhiInfo.Core;
+namespace PhiInfo.Core.Info;
 
 internal class LibLogWriter : LogWriter
 {

@@ -1,28 +1,26 @@
 ﻿using System;
+using PhiInfo.Core.Asset;
+using PhiInfo.Core.Info;
 using PhiInfo.Core.Type;
 
 namespace PhiInfo.Core;
 
 public class PhiInfoContext : IDisposable
 {
-    private readonly Lazy<CatalogProvider> _catalog;
     private readonly IDataProvider _dataProvider;
-
-    private readonly FieldProvider _fieldProvider;
     private bool _disposed;
 
     public PhiInfoContext(IDataProvider dataProvider)
     {
         _dataProvider = dataProvider;
-        _fieldProvider = new FieldProvider(dataProvider);
-        Info = new InfoProvider(dataProvider, _fieldProvider);
-        _catalog = new Lazy<CatalogProvider>(() => new CatalogProvider(dataProvider));
-        Bundle = new BundleProvider(dataProvider);
+        Field = new FieldProvider(dataProvider);
+        Info = new InfoProvider(dataProvider, Field);
+        Asset = new AssetProvider(dataProvider);
     }
 
-    public BundleProvider Bundle { get; }
+    public AssetProvider Asset { get; }
     public InfoProvider Info { get; }
-    public CatalogProvider Catalog => _catalog.Value;
+    public FieldProvider Field { get; }
 
     public void Dispose()
     {
@@ -38,7 +36,7 @@ public class PhiInfoContext : IDisposable
         if (disposing)
         {
             Info.Dispose();
-            _fieldProvider.Dispose();
+            Field.Dispose();
             _dataProvider.Dispose();
         }
     }

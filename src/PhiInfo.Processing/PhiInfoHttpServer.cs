@@ -18,20 +18,27 @@ public class PhiInfoHttpServer : IDisposable
     private readonly PhiInfoRouter _router;
     private bool _disposed;
 
-    public PhiInfoHttpServer(
-        PhiInfoContext context,
-        AppInfo appInfo,
-        uint port = 41669,
-        string host = "127.0.0.1",
+    public PhiInfoHttpServer(PhiInfoContext context, uint port = 41669, string host = "127.0.0.1",
         IImageFormat? imageFormat = null)
     {
         _context = context;
-        _router = new PhiInfoRouter(_context, appInfo, "HTTPServer", imageFormat);
+        _router = new PhiInfoRouter(_context, "HTTPServer", imageFormat);
 
         _listener.Prefixes.Add($"http://{host}:{port}/");
         _listener.IgnoreWriteExceptions = true;
         _listener.Start();
         _listenerTask = ListenLoopAsync(_cts.Token);
+    }
+
+    [Obsolete(
+        "Use PhiInfoHttpServer(PhiInfoContext context, uint port = 41669, string host = \"127.0.0.1\", IImageFormat? imageFormat = null)")]
+    public PhiInfoHttpServer(
+        PhiInfoContext context,
+        AppInfo appInfo,
+        uint port = 41669,
+        string host = "127.0.0.1",
+        IImageFormat? imageFormat = null) : this(context, port, host, imageFormat)
+    {
     }
 
     public bool IsRunning => _listener.IsListening;
