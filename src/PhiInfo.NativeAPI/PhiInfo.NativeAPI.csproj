@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+        <ProjectReference Include="..\PhiInfo.Processing\PhiInfo.Processing.csproj"/>
+    </ItemGroup>
+
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <PublishTrimmed>true</PublishTrimmed>
+        <TrimMode>full</TrimMode>
+        <PublishAot>true</PublishAot>
+        <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
+        <StripSymbols>true</StripSymbols>
+        <DebugType>none</DebugType>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+        <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <Version>0.1.0</Version>
+        <GitHash>dev</GitHash>
+        <InformationalVersion>$(Version)+$(GitHash)</InformationalVersion>
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+        <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    </PropertyGroup>
+
+    <Import Project="PhiInfo.NativeAPI.targets"/>
+</Project>

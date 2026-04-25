@@ -81,22 +81,42 @@ public class PhiInfoRouter(PhiInfoContext context, string apiType, IImageFormat?
             var keyStr = keyWithSuffix[..dotIndex];
             var suffix = keyWithSuffix[(dotIndex + 1)..];
 
-            var type = suffix switch
-            {
-                var s when s.Equals(_suffix.text) => "text",
-                var s when s.Equals(_suffix.music) => "music",
-                var s when s.Equals(_suffix.image) => "image",
-                _ => null
-            };
-
-            if (type is null)
-                return new Response(400, "text/plain", "Invalid asset suffix"u8.ToArray());
-
             var name = context.Asset.Catalog.GetOrDefault(keyStr, null);
             if (name == null)
                 return new Response(404, "text/plain", "Key not found"u8.ToArray());
 
-            return HandleAsset(name, type);
+            switch (suffix)
+            {
+                case var s when s.Equals(_suffix.text):
+                {
+                    using var textData = context.Asset.Get<UnityText>(name);
+                    return new Response(200, "text/plain",
+                        Encoding.UTF8.GetBytes(textData.Content));
+                }
+
+                case var s when s.Equals(_suffix.music):
+                {
+                    var musicData = PhiInfoDecoders.DecoderMusic(
+                        context.Asset.Get<UnityMusic>(name));
+                    return new Response(200, "audio/ogg", musicData);
+                }
+
+                case var s when s.Equals(_suffix.image):
+                {
+                    var imageFormatInstance = imageFormat ?? JpegFormat.Instance;
+                    using var ms = new MemoryStream();
+                    using var image = PhiInfoDecoders.DecoderImage(
+                        context.Asset.Get<UnityImage>(name));
+
+                    image.Save(ms, Manager.GetEncoder(imageFormatInstance));
+                    return new Response(200,
+                        imageFormatInstance.DefaultMimeType,
+                        ms.ToArray());
+                }
+
+                default:
+                    return new Response(400, "text/plain", "Invalid asset suffix"u8.ToArray());
+            }
         }
 
         switch (path)
@@ -145,40 +165,5 @@ public class PhiInfoRouter(PhiInfoContext context, string apiType, IImageFormat?
     private byte[] SerializeJson<T>(T data, JsonTypeInfo<T> typeInfo)
     {
         return JsonSerializer.SerializeToUtf8Bytes(data, typeInfo);
-    }
-
-    private Response HandleAsset(string name, string type)
-    {
-        try
-        {
-            switch (type)
-            {
-                case "text":
-                {
-                    using var textData = context.Asset.Get<UnityText>(name);
-                    return new Response(200, "text/plain", Encoding.UTF8.GetBytes(textData.Content));
-                }
-
-                case "music":
-                    var musicData = PhiInfoDecoders.DecoderMusic(context.Asset.Get<UnityMusic>(name));
-                    return new Response(200, "audio/ogg", musicData);
-
-                case "image":
-                {
-                    var imageFormatInstance = imageFormat ?? JpegFormat.Instance;
-                    using var ms = new MemoryStream();
-                    using var image = PhiInfoDecoders.DecoderImage(context.Asset.Get<UnityImage>(name));
-                    image.Save(ms, Manager.GetEncoder(imageFormatInstance));
-                    return new Response(200, imageFormatInstance.DefaultMimeType, ms.ToArray());
-                }
-
-                default:
-                    return new Response(400, "text/plain", "Invalid asset type"u8.ToArray());
-            }
-        }
-        catch (Exception e)
-        {
-            return new Response(400, "text/plain", Encoding.UTF8.GetBytes(e.Message));
-        }
     }
 }
