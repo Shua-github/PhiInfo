@@ -1,6 +1,6 @@
 import ctypes
 from dataclasses import dataclass
-from typing import list, Any
+from typing import Any
 
 nint = ctypes.c_ssize_t
 
