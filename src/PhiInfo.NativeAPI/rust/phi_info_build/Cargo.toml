@@ -1,0 +1,9 @@
+[package]
+name = "phi_info_build"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+
+[dependencies]
+dirs = "6.0.0"

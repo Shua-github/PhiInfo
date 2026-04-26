@@ -1,0 +1,9 @@
+[package]
+name = "phi_info"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+
+[dependencies]
+phi_info_sys = { path = "../phi_info_sys" }

@@ -1,0 +1,22 @@
+[package]
+name = "phi_info_bridge"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.28.3", features = ["abi3-py310"], optional = true }
+napi = {version = "3", optional = true}
+napi-derive = {version = "3", optional = true}
+phi_info = { path = "../phi_info" }
+
+[build-dependencies]
+phi_info_build = { path = "../phi_info_build" }
+napi-build ={ version = "1"}
+
+[features]
+default = ["python","node"]
+python = ["pyo3"]
+node = ["napi","napi-derive"]

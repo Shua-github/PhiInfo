@@ -111,12 +111,6 @@ public static class PhiInfoNativeApi
         if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "phi_info_add", CallConvs = [typeof(CallConv)])]
-    public static int PhiInfoAdd(int a, int b)
-    {
-        return a + b;
-    }
-
     private static IReadAt CreateReadAt(string url)
     {
         if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||

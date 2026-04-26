@@ -1,0 +1,3 @@
+[workspace]
+resolver = "3"
+members = ["phi_info", "phi_info_bridge","phi_info_build","phi_info_sys"]

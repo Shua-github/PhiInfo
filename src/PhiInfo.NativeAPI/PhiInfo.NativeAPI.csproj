@@ -29,5 +29,9 @@
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     </PropertyGroup>
 
+    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        <AssemblyName>libPhiInfo.NativeAPI</AssemblyName>
+    </PropertyGroup>
+
     <Import Project="PhiInfo.NativeAPI.targets"/>
 </Project>
