@@ -11,50 +11,10 @@ public interface IFfiFree<T> where T : unmanaged
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct FfiString : IFfiFree<FfiString>
-{
-    public byte* Data;
-    public nint Length;
-
-    public static implicit operator FfiString(string str)
-    {
-        var bytes = Encoding.UTF8.GetBytes(str);
-
-        var ptr = (byte*)Marshal.AllocHGlobal(bytes.Length);
-
-        for (var i = 0; i < bytes.Length; i++) ptr[i] = bytes[i];
-
-        return new FfiString
-        {
-            Data = ptr,
-            Length = bytes.Length
-        };
-    }
-
-    public override string ToString()
-    {
-        if (Data == null || Length == 0)
-            return string.Empty;
-
-        return Encoding.UTF8.GetString(Data, (int)Length);
-    }
-
-    public static void Free(FfiString* ptr)
-    {
-        if (ptr->Data is not null)
-        {
-            Marshal.FreeHGlobal((IntPtr)ptr->Data);
-            ptr->Data = null;
-            ptr->Length = 0;
-        }
-    }
-}
-
-[StructLayout(LayoutKind.Sequential)]
 public unsafe struct FfiArray<T> where T : unmanaged
 {
     public T* Data;
-    public nint Length;
+    public nuint Length;
 
     public static implicit operator FfiArray<T>(T[] array)
     {
@@ -71,7 +31,24 @@ public unsafe struct FfiArray<T> where T : unmanaged
         return new FfiArray<T>
         {
             Data = ptr,
-            Length = array.Length
+            Length = (nuint)array.Length
+        };
+    }
+
+    public static implicit operator FfiArray<T>(ReadOnlySpan<T> span)
+    {
+        if (span.Length == 0)
+            return default;
+
+        var size = sizeof(T) * span.Length;
+        var ptr = (T*)Marshal.AllocHGlobal(size);
+
+        span.CopyTo(new Span<T>(ptr, span.Length));
+
+        return new FfiArray<T>
+        {
+            Data = ptr,
+            Length = (nuint)span.Length
         };
     }
 
@@ -95,19 +72,24 @@ public unsafe struct FfiArray<T> where T : unmanaged
 public unsafe struct FfiResponse : IFfiFree<FfiResponse>
 {
     public ushort Code;
-    public FfiString Mime;
+    public FfiArray<byte> Mime;
     public FfiArray<byte> Data;
 
     public static void Free(FfiResponse* ptr)
     {
-        FfiString.Free(&ptr->Mime);
+        FfiArray<byte>.Free(&ptr->Mime);
         FfiArray<byte>.Free(&ptr->Data);
     }
 
     public static implicit operator FfiResponse(Response resp)
     {
         var code = resp.code;
-        FfiString mime = resp.mime ?? string.Empty;
+        FfiArray<byte> mime;
+        if (resp.mime == null)
+            mime = ""u8;
+        else
+            mime = Encoding.UTF8.GetBytes(resp.mime);
+
         FfiArray<byte> bytes = resp.data ?? [];
 
         return new FfiResponse
@@ -117,4 +99,30 @@ public unsafe struct FfiResponse : IFfiFree<FfiResponse>
             Data = bytes
         };
     }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FfiResult : IFfiFree<FfiResult>
+{
+    // 等于0表示成功，非0表示失败
+    public byte code;
+    public FfiArray<byte> messageAndStackTrace;
+
+    public static void Free(FfiResult* ptr)
+    {
+        FfiArray<byte>.Free(&ptr->messageAndStackTrace);
+    }
+
+    public static implicit operator FfiResult(Exception ex)
+    {
+        var messageAndStackTrace = Encoding.UTF8.GetBytes(ex.Message + "\n" + (ex.StackTrace ?? ""));
+
+        return new FfiResult
+        {
+            code = 1,
+            messageAndStackTrace = messageAndStackTrace
+        };
+    }
+
+    public static FfiResult OK => default;
 }

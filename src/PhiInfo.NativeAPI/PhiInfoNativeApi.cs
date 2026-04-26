@@ -17,16 +17,16 @@ public static class PhiInfoNativeApi
 {
     private static PhiInfoRouter? _router;
     private static PhiInfoContext? _context;
-    private static string? _lastError;
 
     [UnmanagedCallersOnly(EntryPoint = "phi_info_init", CallConvs = [typeof(CallConv)])]
-    public static byte PhiInfoInit(FfiArray<FfiString> ffiFiles, FfiString ffiImageFormat, FfiArray<byte> ffiCldbData)
+    public static FfiResult PhiInfoInit(FfiArray<FfiArray<byte>> ffiFiles, FfiArray<byte> ffiImageFormat,
+        FfiArray<byte> ffiCldbData)
     {
         try
         {
             ResetInternal();
             var files = ffiFiles.AsSpan().ToArray();
-            var imgFmtName = ffiImageFormat.ToString();
+            var imgFmtName = Encoding.UTF8.GetString(ffiImageFormat.AsSpan());
             var cldbStream = new MemoryStream(ffiCldbData.AsSpan().ToArray());
 
             var manager = Configuration.Default.ImageFormatsManager;
@@ -34,47 +34,43 @@ public static class PhiInfoNativeApi
                                 string.Equals(f.Name, imgFmtName, StringComparison.OrdinalIgnoreCase))
                             ?? throw new ArgumentException($"Unknown image format: {imgFmtName}");
 
-            var urls = files.Select(f => f.ToString()).ToArray();
+            var urls = files.Select(f => Encoding.UTF8.GetString(f.AsSpan())).ToArray();
 
             var zips = new ShuaZip[urls.Length];
             for (var i = 0; i < urls.Length; i++) zips[i] = new ShuaZip(CreateReadAt(urls[i]));
 
             _context = new PhiInfoContext(new AndroidPackagesDataProvider(zips, cldbStream));
             _router = new PhiInfoRouter(_context, "native", imgFormat);
-            _lastError = null;
         }
         catch (Exception ex)
         {
             ResetInternal();
-            _lastError = ex.Message;
-            return 1;
+            return ex;
         }
 
-        return 0;
+        return FfiResult.OK;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "phi_info_reset", CallConvs = [typeof(CallConv)])]
-    public static byte PhiInfoReset()
+    public static FfiResult PhiInfoReset()
     {
         try
         {
             ResetInternal();
-            _lastError = null;
-            return 0;
+            return FfiResult.OK;
         }
         catch (Exception ex)
         {
-            _lastError = ex.Message;
-            return 1;
+            return ex;
         }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "phi_info_call_router", CallConvs = [typeof(CallConv)])]
-    public static FfiResponse PhiInfoCallRouter(FfiString path)
+    public static FfiResponse PhiInfoCallRouter(FfiArray<byte> path)
     {
         try
         {
-            var pathStr = path.ToString();
+            var pathStr = Encoding.UTF8.GetString(path.AsSpan());
             if (string.IsNullOrEmpty(pathStr))
                 return CreateErrorResponse("Missing path");
 
@@ -92,49 +88,33 @@ public static class PhiInfoNativeApi
     }
 
     [UnmanagedCallersOnly(EntryPoint = "phi_info_get_image_formats", CallConvs = [typeof(CallConv)])]
-    public static FfiArray<FfiString> PhiInfoGetImageFormats()
+    public static FfiArray<FfiArray<byte>> PhiInfoGetImageFormats()
     {
         try
         {
             var names = Configuration.Default.ImageFormatsManager.ImageFormats
-                .Select(f => (FfiString)f.Name)
+                .Select(f => (FfiArray<byte>)Encoding.UTF8.GetBytes(f.Name))
                 .ToArray();
 
-            FfiArray<FfiString> result = names;
+            FfiArray<FfiArray<byte>> result = names;
             return result;
-        }
-        catch (Exception ex)
-        {
-            _lastError = ex.Message;
-            return default;
-        }
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "phi_info_get_last_error", CallConvs = [typeof(CallConv)])]
-    public static FfiString PhiInfoGetLastError()
-    {
-        try
-        {
-            return _lastError ?? string.Empty;
         }
         catch
         {
-            return string.Empty;
+            return default;
         }
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "phi_info_clear_error", CallConvs = [typeof(CallConv)])]
-    public static int PhiInfoClearError()
-    {
-        var hadError = _lastError is not null && _lastError.Length > 0;
-        _lastError = null;
-        return hadError ? 1 : 0;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "phi_info_free", CallConvs = [typeof(CallConv)])]
     public static void PhiInfoFree(IntPtr ptr)
     {
         if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "phi_info_add", CallConvs = [typeof(CallConv)])]
+    public static int PhiInfoAdd(int a, int b)
+    {
+        return a + b;
     }
 
     private static IReadAt CreateReadAt(string url)
@@ -159,7 +139,7 @@ public static class PhiInfoNativeApi
         return new FfiResponse
         {
             Code = 500,
-            Mime = "text/plain",
+            Mime = "text/plain"u8,
             Data = Encoding.UTF8.GetBytes(message)
         };
     }
@@ -169,6 +149,5 @@ public static class PhiInfoNativeApi
         _router = null;
         _context?.Dispose();
         _context = null;
-        _lastError = null;
     }
 }

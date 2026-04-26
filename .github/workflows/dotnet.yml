@@ -6,11 +6,9 @@ on:
     paths:
       - "src/**"
       - ".github/workflows/**"
-      - "!src/PhiInfo.NativeAPI/bind/**"
   pull_request:
     paths:
       - "src/**"
-      - "!src/PhiInfo.NativeAPI/bind/**"
 
 jobs:
   build:
