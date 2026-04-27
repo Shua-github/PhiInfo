@@ -146,6 +146,7 @@ fn link_windows() {
 }
 
 fn link_android(nuget_native: &Path) {
+    println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
     println!("cargo:rustc-link-arg=-Wl,--allow-multiple-definition");
     println!(
         "cargo:rustc-link-arg={}",
