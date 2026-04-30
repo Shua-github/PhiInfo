@@ -107,9 +107,11 @@ fn nuget_native_path(home: &Path, rid: &str, version: &str) -> PathBuf {
 }
 
 fn link_args(rid: &str) {
-    if !rid.starts_with("win") {
-        println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
-    }   
+    if rid.starts_with("linux") {
+        println!("cargo:rustc-link-arg=-Wl,--gc-sections");
+    } else if rid.starts_with("osx") || rid.starts_with("ios") || rid.starts_with("tvos") {
+        println!("cargo:rustc-link-arg=-Wl,-dead_strip");
+    }
 }
 
 fn find_runtime_version(home: &Path, rid: &str, major: &str) -> Option<String> {
