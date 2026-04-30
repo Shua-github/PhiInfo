@@ -150,7 +150,7 @@ fn ilc_libs(info: &RidInfo) -> Vec<String> {
 fn windows_ilc_libs(info: &RidInfo) -> Vec<String> {
     let mut libs = Vec::new();
 
-    libs.push("bootstrapper.obj".to_string());
+    libs.push("bootstrapperdll.obj".to_string());
 
     libs.push("Runtime.WorkstationGC.lib".to_string());
 
@@ -177,7 +177,7 @@ fn windows_ilc_libs(info: &RidInfo) -> Vec<String> {
 fn unix_ilc_libs(info: &RidInfo) -> Vec<String> {
     let mut libs = Vec::new();
 
-    libs.push("libbootstrapper.o".to_string());
+    libs.push("libbootstrapperdll.o".to_string());
 
     libs.push("libRuntime.WorkstationGC.a".to_string());
 
