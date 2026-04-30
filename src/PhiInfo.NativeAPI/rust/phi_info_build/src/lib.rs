@@ -81,7 +81,7 @@ fn nuget_native_path(home: &Path, rid: &str, version: &str) -> PathBuf {
         .join("native")
 }
 
-fn link_linux(nuget_native: &Path) {
+fn link_linux(nuget_native: &Path, rid: &str) {
     println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
 
     let bootstrapper = nuget_native.join("libbootstrapperdll.o");
@@ -100,7 +100,9 @@ fn link_linux(nuget_native: &Path) {
     }
 
     println!("cargo:rustc-link-lib=static=eventpipe-disabled");
-    println!("cargo:rustc-link-lib=static=Runtime.VxsortDisabled");
+    if rid == "linux-x64" {
+        println!("cargo:rustc-link-lib=static=Runtime.VxsortDisabled");
+    }
     println!("cargo:rustc-link-lib=static=standalonegc-disabled");
     println!("cargo:rustc-link-lib=static=aotminipal");
 
@@ -183,7 +185,7 @@ fn link_platform(rid: &str, nuget_native: &Path) {
     } else if rid.starts_with("linux-bionic-") {
         link_android(nuget_native);
     } else if rid.starts_with("linux-") {
-        link_linux(nuget_native);
+        link_linux(nuget_native, rid);
     }
 }
 
