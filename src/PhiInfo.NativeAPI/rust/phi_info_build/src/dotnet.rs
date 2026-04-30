@@ -32,9 +32,8 @@ fn parse_rid(rid: &str) -> RidInfo {
         || target_os.starts_with("ios")
         || target_os.starts_with("tvos")
         || target_os == "maccatalyst";
-    let is_ios_like = target_os == "maccatalyst"
-        || target_os.starts_with("ios")
-        || target_os.starts_with("tvos");
+    let is_ios_like =
+        target_os == "maccatalyst" || target_os.starts_with("ios") || target_os.starts_with("tvos");
 
     RidInfo {
         target_os,
@@ -45,11 +44,41 @@ fn parse_rid(rid: &str) -> RidInfo {
     }
 }
 
-pub fn get_lib_list(rid: &str) -> (Vec<String>, Vec<String>) {
+fn link_args(info: &RidInfo) -> Vec<String> {
+    let mut args = Vec::new();
+
+    if info.is_apple {
+        args.push("-Wl,-dead_strip".to_string());
+
+        fn fw(name: &str, args: &mut Vec<String>) {
+            args.push("-framework".to_string());
+            args.push(name.to_string());
+        }
+
+        fw("CoreFoundation", &mut args);
+        fw("Foundation", &mut args);
+        fw("Security", &mut args);
+        fw("Network", &mut args);
+        fw("CryptoKit", &mut args);
+
+        if !info.target_os.starts_with("tvos") {
+            fw("GSS", &mut args);
+        }
+    }
+
+    if info.target_os == "linux" {
+        args.push("-Wl,--gc-sections".to_string());
+    }
+
+    args
+}
+
+pub fn get_lib_list(rid: &str) -> (Vec<String>, Vec<String>, Vec<String>) {
     let info = parse_rid(rid);
     let system = system_libs(&info);
     let ilc = ilc_libs(&info);
-    (system, ilc)
+    let link_args = link_args(&info);
+    (system, ilc, link_args)
 }
 
 fn system_libs(info: &RidInfo) -> Vec<String> {
@@ -62,21 +91,8 @@ fn system_libs(info: &RidInfo) -> Vec<String> {
 
 fn windows_system_libs() -> Vec<String> {
     vec![
-        "advapi32",
-        "bcrypt",
-        "crypt32",
-        "iphlpapi",
-        "kernel32",
-        "mswsock",
-        "ncrypt",
-        "normaliz",
-        "ntdll",
-        "ole32",
-        "oleaut32",
-        "secur32",
-        "user32",
-        "version",
-        "ws2_32",
+        "advapi32", "bcrypt", "crypt32", "iphlpapi", "kernel32", "mswsock", "ncrypt", "normaliz",
+        "ntdll", "ole32", "oleaut32", "secur32", "user32", "version", "ws2_32",
     ]
     .into_iter()
     .map(String::from)
@@ -115,15 +131,6 @@ fn unix_system_libs(info: &RidInfo) -> Vec<String> {
         libs.push("swiftCore".to_string());
         libs.push("swiftFoundation".to_string());
         libs.push("icucore".to_string());
-
-        libs.push("CoreFoundation".to_string());
-        libs.push("CryptoKit".to_string());
-        libs.push("Foundation".to_string());
-        libs.push("Network".to_string());
-        libs.push("Security".to_string());
-        if !info.target_os.starts_with("tvos") {
-            libs.push("GSS".to_string());
-        }
     }
 
     if !info.is_apple && info.libc_flavor != "bionic" {

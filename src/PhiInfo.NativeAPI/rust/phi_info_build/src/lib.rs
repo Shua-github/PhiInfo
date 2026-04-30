@@ -106,14 +106,6 @@ fn nuget_native_path(home: &Path, rid: &str, version: &str) -> PathBuf {
         .join("native")
 }
 
-fn link_args(rid: &str) {
-    if rid.starts_with("linux") {
-        println!("cargo:rustc-link-arg=-Wl,--gc-sections");
-    } else if rid.starts_with("osx") || rid.starts_with("ios") || rid.starts_with("tvos") {
-        println!("cargo:rustc-link-arg=-Wl,-dead_strip");
-    }
-}
-
 fn find_runtime_version(home: &Path, rid: &str, major: &str) -> Option<String> {
     let base = home
         .join(".nuget")
@@ -167,23 +159,27 @@ pub fn setup(csproj_path: PathBuf, output_name: &str) {
     dotnet_publish(&csproj_path, &rid);
 
     let home = dirs::home_dir().expect("no home dir");
-    let version = find_runtime_version(&home, &rid, DOTNET_VERSION).expect("runtime version not found");
+    let version =
+        find_runtime_version(&home, &rid, DOTNET_VERSION).expect("runtime version not found");
     let nuget_native = nuget_native_path(&home, &rid, &version);
     let publish_dir = publish_output_dir(&csharp_root, &rid);
 
-    let suffix = if rid.starts_with("win") {
-        "lib"
-    } else {
-        "a"
-    };
-    println!("cargo:rustc-link-arg={}", publish_dir.join(format!("{}.{}", output_name,suffix)).display());
+    let suffix = if rid.starts_with("win") { "lib" } else { "a" };
+    println!(
+        "cargo:rustc-link-arg={}",
+        publish_dir
+            .join(format!("{}.{}", output_name, suffix))
+            .display()
+    );
 
-    let (system_libs, ilc_files) = dotnet::get_lib_list(&rid);
-    link_args(&rid);
+    let (system_libs, ilc_files, link_args) = dotnet::get_lib_list(&rid);
     for lib in &system_libs {
         println!("cargo:rustc-link-lib={}", lib);
     }
     for file in &ilc_files {
         println!("cargo:rustc-link-arg={}", nuget_native.join(file).display());
+    }
+    for arg in &link_args {
+        println!("cargo:rustc-link-arg={}", arg);
     }
 }

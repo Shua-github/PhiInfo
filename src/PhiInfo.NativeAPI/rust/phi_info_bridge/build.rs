@@ -1,14 +1,12 @@
 use std::env;
 
-
 #[cfg(feature = "node")]
 fn node_setup() {
     napi_build::setup();
 }
 
 #[cfg(not(feature = "node"))]
-fn node_setup() {
-}
+fn node_setup() {}
 
 fn main() {
     node_setup();
