@@ -103,8 +103,8 @@
         "dependencies": {
           "AssetRipper.TextureDecoder": "[2.6.1, )",
           "Fmod5Sharp": "[3.1.0, )",
-          "PhigrosLabs.PhiInfo.Core": "[1.0.0, )",
-          "Shua.Zip": "[1.0.0, )",
+          "PhigrosLabs.PhiInfo.Core": "[3.0.0, )",
+          "Shua.Zip": "[2.1.0, )",
           "SixLabors.ImageSharp": "[3.1.12, )"
         }
       },

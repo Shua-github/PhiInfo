@@ -1,9 +1,17 @@
 use std::env;
 
+
+#[cfg(feature = "node")]
+fn node_setup() {
+    napi_build::setup();
+}
+
+#[cfg(not(feature = "node"))]
+fn node_setup() {
+}
+
 fn main() {
-    if env::var("CARGO_FEATURE_NODE").is_ok() {
-        napi_build::setup();
-    }
+    node_setup();
 
     let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
 

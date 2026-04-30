@@ -14,9 +14,9 @@ phi_info = { path = "../phi_info" }
 
 [build-dependencies]
 phi_info_build = { path = "../phi_info_build" }
-napi-build ={ version = "1"}
+napi-build ={ version = "1", optional = true}
 
 [features]
-default = ["python","node"]
+default = []
 python = ["pyo3"]
-node = ["napi","napi-derive"]
+node = ["napi","napi-derive","napi-build"]
