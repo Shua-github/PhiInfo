@@ -32,6 +32,4 @@
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     </PropertyGroup>
-
-    <Import Project="PhiInfo.CLI.targets"/>
 </Project>

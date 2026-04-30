@@ -16,104 +16,110 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: windows-2025, short: windows, arch: x64}
-          - {os: ubuntu-24.04, short: linux, arch: x64}
-          - {os: ubuntu-24.04-arm, short: linux, arch: arm64}
+          - { os: windows-2025, short: windows, arch: x64 }
+          - { os: ubuntu-24.04, short: linux, arch: x64 }
+          - { os: ubuntu-24.04-arm, short: linux, arch: arm64 }
+          - { os: macos-26, short: macos, arch: arm64 }
 
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
 
     steps:
-    - uses: actions/checkout@v6
-      with:
-        persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v5.1.0
-      with:
-        dotnet-version: "10.0"
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5.1.0
+        with:
+          dotnet-version: "10.0"
 
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Rust cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: |
-          src/PhiInfo.NativeAPI/rust -> target
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src/PhiInfo.NativeAPI/rust -> target
+          cache-targets: true
+          cache-workspace-crates: true
+          shared-key: native-ci
+          key: ${{ matrix.short }}-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-        cache-targets: true
-        cache-workspace-crates: true
-        shared-key: native-ci
-        key: ${{ matrix.short }}-${{ matrix.arch }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libssl-dev
 
-    - name: Install Linux dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang libssl-dev
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
 
-    - name: Setup Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.10' 
+      - name: Build Python feature
+        working-directory: src/PhiInfo.NativeAPI/rust
+        run: cargo build --release --features python
 
-    - name: Build Python feature
-      working-directory: src/PhiInfo.NativeAPI/rust
-      run: cargo build --release --features python
+      - name: Collect Python artifacts
+        shell: bash
+        run: |
+          set -e
 
-    - name: Collect Python artifacts (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $dll = "src\PhiInfo.NativeAPI\rust\target\release\phi_info_bridge.dll"
-        $stub = "src\PhiInfo.NativeAPI\rust\phi_info_bridge\src\python\phi_info_bridge.pyi"
-        New-Item -ItemType Directory -Force -Path artifacts/python
-        Copy-Item $dll artifacts/python/phi_info_bridge.pyd
-        Copy-Item $stub artifacts/python/phi_info_bridge.pyi
+          base="src/PhiInfo.NativeAPI/rust"
+          stub="$base/phi_info_bridge/src/python/phi_info_bridge.pyi"
 
-    - name: Collect Python artifacts (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        so="src/PhiInfo.NativeAPI/rust/target/release/libphi_info_bridge.so"
-        stub="src/PhiInfo.NativeAPI/rust/phi_info_bridge/src/python/phi_info_bridge.pyi"
-        mkdir -p artifacts/python
-        cp "$so" artifacts/python/phi_info_bridge.so
-        cp "$stub" artifacts/python/phi_info_bridge.pyi
+          mkdir -p artifacts/python
 
-    - name: Upload Python artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: ${{ matrix.short }}-${{ matrix.arch }}-python
-        path: artifacts/python/*
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            lib="$base/target/release/phi_info_bridge.dll"
+            cp "$lib" artifacts/python/phi_info_bridge.pyd
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            lib="$base/target/release/libphi_info_bridge.dylib"
+            cp "$lib" artifacts/python/phi_info_bridge.dylib
+          else
+            lib="$base/target/release/libphi_info_bridge.so"
+            cp "$lib" artifacts/python/phi_info_bridge.so
+          fi
 
-    - name: Build Node feature
-      working-directory: src/PhiInfo.NativeAPI/rust
-      run: cargo build --release --features node
+          cp "$stub" artifacts/python/
 
-    - name: Collect Node artifacts (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $dll = "src\PhiInfo.NativeAPI\rust\target\release\phi_info_bridge.dll"
-        $stub = "src\PhiInfo.NativeAPI\rust\phi_info_bridge\src\node\phi_info_bridge.d.ts"
-        New-Item -ItemType Directory -Force -Path artifacts/node
-        Copy-Item $dll artifacts/node/phi_info_bridge.node
-        Copy-Item $stub artifacts/node/phi_info_bridge.d.ts
+      - name: Upload Python artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.short }}-${{ matrix.arch }}-python
+          path: artifacts/python/*
 
-    - name: Collect Node artifacts (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        so="src/PhiInfo.NativeAPI/rust/target/release/libphi_info_bridge.so"
-        stub="src/PhiInfo.NativeAPI/rust/phi_info_bridge/src/node/phi_info_bridge.d.ts"
-        mkdir -p artifacts/node
-        cp "$so" artifacts/node/phi_info_bridge.node
-        cp "$stub" artifacts/node/phi_info_bridge.d.ts
+      - name: Build Node feature
+        working-directory: src/PhiInfo.NativeAPI/rust
+        run: cargo build --release --features node
 
-    - name: Upload Node artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: ${{ matrix.short }}-${{ matrix.arch }}-node
-        path: artifacts/node/*
+      - name: Collect Node artifacts
+        shell: bash
+        run: |
+          set -e
+
+          base="src/PhiInfo.NativeAPI/rust"
+          stub="$base/phi_info_bridge/src/node/phi_info_bridge.d.ts"
+
+          mkdir -p artifacts/node
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            lib="$base/target/release/phi_info_bridge.dll"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            lib="$base/target/release/libphi_info_bridge.dylib"
+          else
+            lib="$base/target/release/libphi_info_bridge.so"
+          fi
+
+          cp "$lib" artifacts/node/phi_info_bridge.node
+          cp "$stub" artifacts/node/
+
+      - name: Upload Node artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.short }}-${{ matrix.arch }}-node
+          path: artifacts/node/*

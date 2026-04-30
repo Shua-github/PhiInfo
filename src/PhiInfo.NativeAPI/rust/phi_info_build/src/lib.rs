@@ -3,20 +3,45 @@ use std::{
     process::Command,
 };
 
+mod dotnet;
+
 const DOTNET_VERSION: &str = "10";
 
-fn target_to_rid(target: &str) -> &'static str {
-    match target {
-        "x86_64-unknown-linux-gnu" => "linux-x64",
-        "aarch64-unknown-linux-gnu" => "linux-arm64",
+pub fn target_to_rid(target: &str) -> String {
+    let t = target.to_lowercase();
 
-        "x86_64-pc-windows-msvc" => "win-x64",
-        "aarch64-pc-windows-msvc" => "win-arm64",
+    let parts: Vec<&str> = t.split('-').collect();
+    if parts.len() < 3 {
+        return "unknown".to_string();
+    }
 
-        "aarch64-linux-android" => "linux-bionic-arm64",
-        "x86_64-linux-android" => "linux-bionic-x64",
+    let arch = normalize_arch(parts[0]);
 
-        _ => panic!("unsupported target: {}", target),
+    let os_part = parts[2];
+
+    let os = match os_part {
+        "windows" => "win",
+        "linux" => "linux",
+        "android" => "linux-bionic",
+        "darwin" => "osx",
+        "ios" => "ios",
+        "tvos" => "tvos",
+        "freebsd" => "freebsd",
+        _ => panic!("不支持"),
+    };
+
+    format!("{os}-{arch}")
+}
+
+fn normalize_arch(arch: &str) -> &str {
+    match arch {
+        "x86_64" | "amd64" => "x64",
+        "i686" | "i386" => "x86",
+        "aarch64" | "arm64" => "arm64",
+        "armv7" | "arm" => "arm",
+        "riscv64" => "riscv64",
+        "loongarch64" => "loongarch64",
+        _ => arch,
     }
 }
 
@@ -81,112 +106,10 @@ fn nuget_native_path(home: &Path, rid: &str, version: &str) -> PathBuf {
         .join("native")
 }
 
-fn link_linux(nuget_native: &Path, rid: &str) {
-    println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
-
-    let bootstrapper = nuget_native.join("libbootstrapperdll.o");
-    println!("cargo:rustc-link-arg={}", bootstrapper.display());
-
-    let native_libs = [
-        "Runtime.WorkstationGC",
-        "System.Native",
-        "System.Globalization.Native",
-        "System.IO.Compression.Native",
-        "System.Net.Security.Native",
-        "System.Security.Cryptography.Native.OpenSsl",
-    ];
-    for lib in native_libs {
-        println!("cargo:rustc-link-lib=static={}", lib);
-    }
-
-    println!("cargo:rustc-link-lib=static=eventpipe-disabled");
-    if rid == "linux-x64" {
-        println!("cargo:rustc-link-lib=static=Runtime.VxsortDisabled");
-    }
-    println!("cargo:rustc-link-lib=static=standalonegc-disabled");
-    println!("cargo:rustc-link-lib=static=aotminipal");
-
-    println!("cargo:rustc-link-lib=static=brotlienc");
-    println!("cargo:rustc-link-lib=static=brotlidec");
-    println!("cargo:rustc-link-lib=static=brotlicommon");
-    println!("cargo:rustc-link-lib=static=z");
-
-    println!("cargo:rustc-link-lib=static=stdc++compat");
-    println!("cargo:rustc-link-lib=dl");
-    println!("cargo:rustc-link-lib=rt");
-    println!("cargo:rustc-link-lib=pthread");
-    println!("cargo:rustc-link-lib=m");
-    println!("cargo:rustc-link-lib=ssl");
-    println!("cargo:rustc-link-lib=crypto");
-}
-
-fn link_windows() {
-    println!("cargo:rustc-link-lib=static=Runtime.WorkstationGC");
-
-    let sys_libs = [
-        "bcrypt", "ole32", "advapi32", "crypt32", "ncrypt", "iphlpapi", "ws2_32",
-    ];
-    for l in sys_libs {
-        println!("cargo:rustc-link-lib={}", l);
-    }
-
-    println!("cargo:rustc-link-arg=bootstrapperdll.obj");
-    println!("cargo:rustc-link-arg=dllmain.obj");
-
-    let extra = [
-        "System.IO.Compression.Native.Aot",
-        "System.Globalization.Native.Aot",
-        "zlibstatic",
-        "eventpipe-disabled",
-        "Runtime.VxsortDisabled",
-        "standalonegc-disabled",
-        "aotminipal",
-    ];
-    for l in extra {
-        println!("cargo:rustc-link-lib=static={}", l);
-    }
-}
-
-fn link_android(nuget_native: &Path) {
-    println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
-    println!("cargo:rustc-link-arg=-Wl,--allow-multiple-definition");
-    println!(
-        "cargo:rustc-link-arg={}",
-        nuget_native.join("libbootstrapperdll.o").display()
-    );
-
-    let libs = [
-        "System.Native",
-        "System.IO.Compression.Native",
-        "System.Security.Cryptography.Native.OpenSsl",
-        "Runtime.WorkstationGC",
-        "eventpipe-disabled",
-        "standalonegc-disabled",
-        "aotminipal",
-        "brotlicommon",
-        "brotlienc",
-        "brotlidec",
-        "stdc++compat",
-    ];
-
-    for l in libs {
-        println!("cargo:rustc-link-lib=static={}", l);
-    }
-
-    println!("cargo:rustc-link-lib=dl");
-    println!("cargo:rustc-link-lib=log");
-    println!("cargo:rustc-link-lib=z");
-    println!("cargo:rustc-link-lib=m");
-}
-
-fn link_platform(rid: &str, nuget_native: &Path) {
-    if rid.starts_with("win-") {
-        link_windows();
-    } else if rid.starts_with("linux-bionic-") {
-        link_android(nuget_native);
-    } else if rid.starts_with("linux-") {
-        link_linux(nuget_native, rid);
-    }
+fn link_args(rid: &str) {
+    if !rid.starts_with("win") {
+        println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
+    }   
 }
 
 fn find_runtime_version(home: &Path, rid: &str, major: &str) -> Option<String> {
@@ -239,18 +162,26 @@ pub fn setup(csproj_path: PathBuf, output_name: &str) {
 
     watch_sources(&csharp_root);
 
-    dotnet_publish(&csproj_path, rid);
+    dotnet_publish(&csproj_path, &rid);
 
     let home = dirs::home_dir().expect("no home dir");
-    let version =
-        find_runtime_version(&home, rid, DOTNET_VERSION).expect("runtime version not found");
-    let nuget_native = nuget_native_path(&home, rid, &version);
-    let publish_dir = publish_output_dir(&csharp_root, rid);
+    let version = find_runtime_version(&home, &rid, DOTNET_VERSION).expect("runtime version not found");
+    let nuget_native = nuget_native_path(&home, &rid, &version);
+    let publish_dir = publish_output_dir(&csharp_root, &rid);
 
-    println!("cargo:rustc-link-search={}", publish_dir.display());
-    println!("cargo:rustc-link-search={}", nuget_native.display());
+    let suffix = if rid.starts_with("win") {
+        "lib"
+    } else {
+        "a"
+    };
+    println!("cargo:rustc-link-arg={}", publish_dir.join(format!("{}.{}", output_name,suffix)).display());
 
-    println!("cargo:rustc-link-lib=static={}", output_name);
-
-    link_platform(rid, &nuget_native);
+    let (system_libs, ilc_files) = dotnet::get_lib_list(&rid);
+    link_args(&rid);
+    for lib in &system_libs {
+        println!("cargo:rustc-link-lib={}", lib);
+    }
+    for file in &ilc_files {
+        println!("cargo:rustc-link-arg={}", nuget_native.join(file).display());
+    }
 }
