@@ -67,7 +67,8 @@ fn link_args(info: &RidInfo) -> Vec<String> {
     }
 
     if info.target_os == "linux" {
-        args.push("-Wl,--gc-sections".to_string());
+        args.push("-z".to_string());
+        args.push("nostart-stop-gc".to_string());
     }
 
     args
